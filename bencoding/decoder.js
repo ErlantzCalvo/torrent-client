@@ -1,0 +1,129 @@
+const SPECIAL_CHARS = {
+  START: {
+    INTEGER: 0x69,
+    DICT: 0x64,
+    LIST: 0x6C
+  },
+  END: 0x65,
+  COLON: 0x3A
+}
+
+var position = 0
+var asString = true
+
+export function decode(buffer) {
+  position = 0
+  asString = true
+  // removeEmptyBytes(buffer)
+  return parseField(buffer)
+}
+
+function parseField(buffer) {
+  switch (buffer.at(position)) {
+    case SPECIAL_CHARS.START.INTEGER:
+      return getInteger(buffer)
+    case SPECIAL_CHARS.START.DICT:
+      return buildDictionary(buffer)
+    case SPECIAL_CHARS.START.LIST:
+      return buildList(buffer)
+    default:
+      if (asString) return getStringBuffer(buffer, position).toString()
+      return getStringBuffer(buffer, position)
+  }
+}
+
+function buildDictionary(buffer) {
+  const dict = {}
+  position++
+  while (buffer.at(position) !== SPECIAL_CHARS.END) {
+    const dictPropertyName = getStringBuffer(buffer).toString()
+    asString = dictPropertyName !== 'pieces'
+    const propertyValue = parseField(buffer)
+    dict[dictPropertyName] = propertyValue
+  }
+
+  position++
+  return dict
+}
+
+function buildList(buffer) {
+  const list = []
+  position++
+  while (buffer.at(position) !== SPECIAL_CHARS.END) {
+    list.push(parseField(buffer))
+  }
+  position++
+  return list
+}
+
+function getInteger(buffer) {
+  position++
+  const intEnd = findNextCharPosition(buffer, SPECIAL_CHARS.END)
+  const resultInteger = getIntFromBuffer(buffer, position, intEnd)
+  position = intEnd + 1
+  return resultInteger
+}
+
+function getStringBuffer(buffer) {
+  let nextColonPos = findNextCharPosition(buffer, SPECIAL_CHARS.COLON)
+  let lengthPrefix = getIntFromBuffer(buffer, position, nextColonPos)
+  position = nextColonPos + 1
+  let result = buffer.slice(position, position + lengthPrefix)
+
+  position += lengthPrefix
+  return result
+}
+
+
+function getIntFromBuffer(buffer, start, end) {
+  let sum = 0
+  let sign = 1
+
+  for (let i = start; i < end; i++) {
+    const num = buffer[i]
+
+    if (num < 58 && num >= 48) {
+      sum = sum * 10 + (num - 48)
+      continue
+    }
+
+    if (i === start && num === 43) { // +
+      continue
+    }
+
+    if (i === start && num === 45) { // -
+      sign = -1
+      continue
+    }
+
+    if (num === 46) { // .
+      // its a float. break here.
+      break
+    }
+
+    throw new Error('not a number: buffer[' + i + '] = ' + num)
+  }
+
+  return sum * sign
+}
+
+function findNextCharPosition(buffer, char) {
+  let currPos = position
+  while (buffer.at(currPos) !== char) currPos++
+  return currPos
+}
+
+function removeEmptyBytes(buffer) {
+  let beginning = 0
+  let i = buffer.indexOf(0x00);
+  const newBuff = []
+  while(i > -1) {
+    newBuff.push(buffer.slice(beginning, i));
+    newBuff.push(buffer.slice(i+1));
+    
+    i = buffer.indexOf(0x00);
+    beginning = i+1
+  }
+
+  buffer = Buffer.concat(newBuff)
+}
