@@ -10,3 +10,17 @@ export function hexUrlEncoding(hexString) {
         return m;
       });
 }
+
+/**
+ * 
+ * @param {Buffer} buffer 
+ * @returns {number}
+ */
+export function bytesToDecimal(buffer) {
+  let result = 0
+  for(let i = buffer.length - 1; i > 0; i--) {
+    result += buffer[i] << (8 * (buffer.length - 1 - i))
+  }
+
+  return result
+}

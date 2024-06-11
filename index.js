@@ -1,20 +1,38 @@
-import { decode } from './bencoding/decoder.js'
 import {TorrentInfo} from './torrent/torrentInfo.js'
-import {hexUrlEncoding} from './utils.js'
+import {Peer} from './connection/peer.js'
 
-const torrentFile = new TorrentInfo('tests/torrent-files/test.torrent')
+const torrentFile = new TorrentInfo('tests/torrent-files/debian.torrent')
+// const torrentFile = new TorrentInfo('tests/torrent-files/big-buck-bunny.torrent')
 // const torrentFile = new TorrentInfo('tests/torrent-files/TGD.torrent')
-const infoHashEncoded = hexUrlEncoding(torrentFile.infoHash)
+
+const peersInfo = await torrentFile.makeAnnounceRequest()
+let currentPeer = 0
+
+connectPeer(peersInfo.peers, currentPeer++)
+
+const interval = setInterval(() => {
+    console.log('Interval')
+  }, 5000)
+
+function connectPeer(peers, index) {
+  console.log('Connecting to peer ', index)
+  const peer = getPeer(peers, index)
+  peer.connect()
+  
+  peer.on('timeout', ()=>{
+    console.log('Peer timeout: ', index)
+    connectPeer(peers, index + 1)
+  })
+
+  peer.on('peer-error', (error)=>{
+    console.log('Peer connection error: ', index, error)
+    connectPeer(peers, index + 1)
+  })
+}
 
 
-const url = `${torrentFile.announce}?info_hash=${infoHashEncoded}&peer_id=-TR2940-k8hj0erlnatz&port=6881`
-fetch(url, {
-    headers: {"Content-Type": "text/html; charset=UTF-8"}
-}).then(res => res.text())
-.then(text => {
-    console.log(text)
-    const buffer = Buffer.from(text, 'ascii')
-    const result = decode(buffer)
-    console.log(result)
-})
-.catch(err => console.log(err))
+function getPeer(peers, index) {
+    const {ip, port} = peers[index]
+    const peerId = peers[index]['peer id']
+    return new Peer(ip, port, peerId, torrentFile.infoHash) 
+}
