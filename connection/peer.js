@@ -1,6 +1,6 @@
 import EventEmitter from 'node:events'
 import { createConnection } from 'node:net'
-import {bytesToDecimal} from '../utils.js'
+import { buildKeepAliveMessage, handlePeerMessage } from './message.js'
 
 
 const SOCKET_CONNECTION_MAX_TIME = 3000 //3s
@@ -16,6 +16,7 @@ export class Peer extends EventEmitter{
         this.bitfield = null
         this.client = null
         this.connectionTimeout = null
+        this.keepAliveInterval = null
     }
 
     connect() {
@@ -25,24 +26,27 @@ export class Peer extends EventEmitter{
 
         this.client.on('error', (err) => {
             peer.emit('peer-error', err)
-            this.client.end()
+            this.disconnect()
         })
 
         this.client.on('data', function(data) {
-            handlePeerMessage(peer, data)
+            handleMessage(peer, data)
         })
 
         this.client.on('timeout', ()=>{
             this.emit('timeout')
-            this.client.end()
+            this.disconnect()
         })
 
         this.client.on('connect', () => {
             this.sendHandshake()
             this.connectionTimeout = setTimeout(() => {
                 this.emit('timeout')
-                this.client.end()
+                this.disconnect()
             }, HANDSHAKE_MAX_TIME)
+
+            // send keep alive message every 2 minutes
+            this.keepAliveInterval = setInterval(() => this.sendKeepAlive(), 120000)
         })
     }
 
@@ -61,6 +65,15 @@ export class Peer extends EventEmitter{
             }
         })
     }
+
+    sendKeepAlive() {
+        this.client.write(buildKeepAliveMessage)
+    }
+
+    disconnect() {
+        clearInterval(this.keepAliveInterval)
+        this.client.end()
+    }
 }
 
 /**
@@ -68,11 +81,12 @@ export class Peer extends EventEmitter{
  * @param {Peer} peer 
  * @param {Buffer} data 
  */
-function handlePeerMessage(peer, data) {
+function handleMessage(peer, data) {
     console.log('Data received from peer: ', data)
     if(!peer.handshakeAchieved) {
         validateHandshake(peer, data)
-    } else if(!peer.bitfield) { 
+    } else { 
+        handlePeerMessage(data, peer)
         /* 
             first 4 bytes indicate length -> 0 0 1 60 -> 100111100 -> 316
             316 bytes of payload. The first is the code
@@ -86,7 +100,6 @@ function handlePeerMessage(peer, data) {
  * 
  * @param {Peer} peer 
  * @param {Buffer} data 
- * @param {string} infoHash 
  * @returns {boolean}
  */
 function validateHandshake(peer, data) {
@@ -116,15 +129,3 @@ function isTheSameInfoHash(bufA, infoHash) {
     return true;
 }
 
-/**
- * 
- * @param {Buffer} data 
- * @returns {number}
- */
-
-function parseBitfield(data) {
-    if(data.length < 5) throw new Error("Invalid bitfield data")
-    const bufferLength = bytesToDecimal(data.subarray(0, 4))
-    if((bufferLength + 4) !== data.length ) throw new Error("Malformed peer message")
-    return data.at(4)
-}
