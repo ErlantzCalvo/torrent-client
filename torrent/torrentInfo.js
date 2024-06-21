@@ -1,8 +1,9 @@
 import fs from 'node:fs'
 import {encode, decode} from '../bencoding/index.js'
-import {createHash} from 'node:crypto'
+import {createHash, randomBytes} from 'node:crypto'
 import {hexUrlEncoding} from '../utils.js'
 import {createSocket} from 'node:dgram'
+import url, { URL } from 'node:url'
 
 export class TorrentInfo {
     constructor(path) {
@@ -58,18 +59,43 @@ async function fetchHttpAnnounce(domain, port, info_hash) {
 }
 
 async function fetchUdpAnnounce(domain, port, info_hash) {
-    const connectionPort = port || 6881
-    const infoHashEncoded = hexUrlEncoding(info_hash)
-    const url = `${domain}?info_hash=${infoHashEncoded}&peer_id=-TR2940-k8hj0erlnatz&port=${connectionPort}`
-   const client = createSocket('udp4')
-   let d = "udp://tracker.leechers-paradise.org"
-   let p = "6969"
-   client.on('message', function(error) {
-    console.error(error)
-   })
+    const client = createSocket('udp4')
 
-   client.send(`${domain}?info_hash=${infoHashEncoded}&peer_id=-TR2940-k8hj0erlnatz&port=${connectionPort}`, connectionPort, domain, 
-    function(error){
-        console.log(error)
-   })
+    const url = new URL(domain)
+    const message = buildUdpRequest()
+    client.on('message', function(data) {
+        console.log(data)
+        const response = resp.readUInt32BE(0)
+        if(response === 0) { //connect
+
+        } else if (response === 1) { //announce
+
+        }
+    })
+
+    client.on('error', function(err){
+        console.error(err)
+        this.close()
+    })
+
+    client.send(message, 0, message.length, url.port, url.hostname, function(err, res){
+        if(err) throw new Error("UDP connection error")
+        console.log("UDP connection succed", res)
+    })
+}
+
+function buildUdpRequest() {
+    const buffer = Buffer.alloc(16)
+
+    // connectionId
+    buffer.writeUInt32BE(0x417, 0)
+    buffer.writeUInt32BE(0x27101980, 4)
+
+    // action: 0 (connect)
+    buffer.writeInt32BE(0, 8)
+
+    //transaction id (random)
+    randomBytes(4).copy(buffer, 12)
+    console.log(buffer)
+    return buffer
 }
