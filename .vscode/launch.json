@@ -21,6 +21,15 @@
                 "<node_internals>/**"
             ],
             "program": "${workspaceFolder}/tests/bencoding.test.js"
-        }
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "prueba",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "program": "${workspaceFolder}/prueba.js"
+        },
     ]
 }

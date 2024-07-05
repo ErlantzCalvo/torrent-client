@@ -8,17 +8,17 @@ const SPECIAL_CHARS = {
   COLON: 0x3A
 }
 
-var position = 0
-var asString = true
+let position = 0
+let asString = true
 
-export function decode(buffer) {
+export function decode (buffer) {
   position = 0
   asString = true
   // removeEmptyBytes(buffer)
   return parseField(buffer)
 }
 
-function parseField(buffer) {
+function parseField (buffer) {
   switch (buffer.at(position)) {
     case SPECIAL_CHARS.START.INTEGER:
       return getInteger(buffer)
@@ -32,7 +32,7 @@ function parseField(buffer) {
   }
 }
 
-function buildDictionary(buffer) {
+function buildDictionary (buffer) {
   const dict = {}
   position++
   while (buffer.at(position) !== SPECIAL_CHARS.END) {
@@ -46,7 +46,7 @@ function buildDictionary(buffer) {
   return dict
 }
 
-function buildList(buffer) {
+function buildList (buffer) {
   const list = []
   position++
   while (buffer.at(position) !== SPECIAL_CHARS.END) {
@@ -56,7 +56,7 @@ function buildList(buffer) {
   return list
 }
 
-function getInteger(buffer) {
+function getInteger (buffer) {
   position++
   const intEnd = findNextCharPosition(buffer, SPECIAL_CHARS.END)
   const resultInteger = getIntFromBuffer(buffer, position, intEnd)
@@ -64,18 +64,17 @@ function getInteger(buffer) {
   return resultInteger
 }
 
-function getStringBuffer(buffer) {
-  let nextColonPos = findNextCharPosition(buffer, SPECIAL_CHARS.COLON)
-  let lengthPrefix = getIntFromBuffer(buffer, position, nextColonPos)
+function getStringBuffer (buffer) {
+  const nextColonPos = findNextCharPosition(buffer, SPECIAL_CHARS.COLON)
+  const lengthPrefix = getIntFromBuffer(buffer, position, nextColonPos)
   position = nextColonPos + 1
-  let result = buffer.slice(position, position + lengthPrefix)
+  const result = buffer.slice(position, position + lengthPrefix)
 
   position += lengthPrefix
   return result
 }
 
-
-function getIntFromBuffer(buffer, start, end) {
+function getIntFromBuffer (buffer, start, end) {
   let sum = 0
   let sign = 1
 
@@ -107,23 +106,8 @@ function getIntFromBuffer(buffer, start, end) {
   return sum * sign
 }
 
-function findNextCharPosition(buffer, char) {
+function findNextCharPosition (buffer, char) {
   let currPos = position
   while (buffer.at(currPos) !== char) currPos++
   return currPos
-}
-
-function removeEmptyBytes(buffer) {
-  let beginning = 0
-  let i = buffer.indexOf(0x00);
-  const newBuff = []
-  while(i > -1) {
-    newBuff.push(buffer.slice(beginning, i));
-    newBuff.push(buffer.slice(i+1));
-    
-    i = buffer.indexOf(0x00);
-    beginning = i+1
-  }
-
-  buffer = Buffer.concat(newBuff)
 }
