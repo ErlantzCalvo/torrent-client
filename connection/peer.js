@@ -17,6 +17,7 @@ export class Peer extends EventEmitter {
     this.connectionTimeout = null
     this.keepAliveInterval = null
     this.piecesQueue = piecesQueue
+    this.choked = false
   }
 
   connect () {
@@ -25,8 +26,7 @@ export class Peer extends EventEmitter {
     this.client.setTimeout(SOCKET_CONNECTION_MAX_TIME)
 
     this.client.on('error', (err) => {
-      peer.emit('peer-error', err)
-      this.disconnect()
+      this.disconnect('peer-error', err)
     })
 
     this.client.on('data', function (data) {
@@ -34,15 +34,13 @@ export class Peer extends EventEmitter {
     })
 
     this.client.on('timeout', () => {
-      this.emit('timeout')
-      this.disconnect()
+      this.disconnect('timeout')
     })
 
     this.client.on('connect', () => {
       this.sendHandshake()
       this.connectionTimeout = setTimeout(() => {
-        this.emit('timeout')
-        this.disconnect()
+        this.disconnect('timeout')
       }, HANDSHAKE_MAX_TIME)
 
       // send keep alive message every 2 minutes
@@ -70,8 +68,23 @@ export class Peer extends EventEmitter {
     this.client.write(buildKeepAliveMessage)
   }
 
-  disconnect () {
+  choke() {
+    this.choked = true
+    this.disconnect('choked');
+  }
+
+  unchoke() {
+    this.choked = false
+    // TO DO: request piece
+  }
+
+  requestPiece(pieceIndex) {
+
+  }
+
+  disconnect (reason, data) {
     clearInterval(this.keepAliveInterval)
+    if(reason) this.emit(reason, data)
     this.client.end()
   }
 }

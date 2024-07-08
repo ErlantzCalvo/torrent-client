@@ -22,8 +22,10 @@ export function handlePeerMessage (data, peer) {
   const message = parseMessage(data)
   switch (message.id) {
     case MESSAGE_TYPES.CHOKE:
+      peer.choke()
       break
     case MESSAGE_TYPES.UNCHOKE:
+      peer.unchoke()
       break
     case MESSAGE_TYPES.INTERESTED:
       break
