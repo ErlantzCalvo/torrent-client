@@ -5,7 +5,7 @@ import { TorrentInfo } from '../torrent/torrentInfo.js'
 import { Queue } from '../managers/queue.js'
 import { BLOCK_LENGTH } from '../constants.js'
 
-const SOCKET_CONNECTION_MAX_TIME = 3000 // 3s
+const SOCKET_CONNECTION_MAX_TIME = 15000 // 15s
 const HANDSHAKE_MAX_TIME = 5000 // 5s
 export class Peer extends EventEmitter {
   /**
@@ -28,7 +28,7 @@ export class Peer extends EventEmitter {
     this.connectionTimeout = null
     this.keepAliveInterval = null
     this.piecesQueue = piecesQueue
-    this.choked = false
+    this.choked = true
     this._availablePieces = []
     this.requested = null
   }
@@ -112,7 +112,7 @@ export class Peer extends EventEmitter {
   _handlePiece(payload) {
     // if is the last block of the current piece, do not continue asking for the piece
     const blockIndex = this.requested.begin / BLOCK_LENGTH
-    console.log(`Received block ${this.requested.begin / BLOCK_LENGTH} of piece ${this.requested.index}`)
+    console.log(`Received block ${blockIndex + 1}/${this.torrent.getBlocksPerPiece(this.requested.index)} of piece ${this.requested.index}`)
     if(this.torrent.isLastBlockOfPiece(this.requested.index, blockIndex)) {
       this._availablePieces.splice(this._availablePieces.indexOf(requested.index), 1)
     }
