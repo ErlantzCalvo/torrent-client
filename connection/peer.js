@@ -1,16 +1,27 @@
 import EventEmitter from 'node:events'
 import { createConnection } from 'node:net'
 import { buildKeepAliveMessage, handlePeerMessage } from './message.js'
+import { TorrentInfo } from '../torrent/torrentInfo.js'
+import { Queue } from '../managers/queue.js'
+import { BLOCK_LENGTH } from '../constants.js'
 
 const SOCKET_CONNECTION_MAX_TIME = 3000 // 3s
 const HANDSHAKE_MAX_TIME = 5000 // 5s
 export class Peer extends EventEmitter {
-  constructor (ip, port, id, infoHash, piecesQueue) {
+  /**
+   * 
+   * @param {string} ip 
+   * @param {number} port 
+   * @param {string} id 
+   * @param {TorrentInfo} torrent 
+   * @param {Queue} piecesQueue 
+   */
+  constructor (ip, port, id, torrent, piecesQueue) {
     super()
     this.ip = ip
     this.port = port
     this.id = id
-    this.infoHash = infoHash
+    this.torrent = torrent
     this.handshakeAchieved = false
     this.bitfield = null
     this.client = null
@@ -18,6 +29,8 @@ export class Peer extends EventEmitter {
     this.keepAliveInterval = null
     this.piecesQueue = piecesQueue
     this.choked = false
+    this._availablePieces = []
+    this.requested = null
   }
 
   connect () {
@@ -39,24 +52,23 @@ export class Peer extends EventEmitter {
 
     this.client.on('connect', () => {
       this.sendHandshake()
-      this.connectionTimeout = setTimeout(() => {
-        this.disconnect('timeout')
-      }, HANDSHAKE_MAX_TIME)
-
       // send keep alive message every 2 minutes
       this.keepAliveInterval = setInterval(() => this.sendKeepAlive(), 120000)
     })
   }
 
   sendHandshake () {
-    if (this.client.readyState !== 'open') throw new Error('Connection is not open')
+    if (this.client.readyState !== 'open') return this.disconnect('peer-error', "Error making handshake request: socket connection is closed")
 
     const buff = Buffer.alloc(68, '', 'hex')
     buff.writeUInt8(19)
     buff.write('BitTorrent protocol', 1, 19, 'utf8')
-    buff.write(this.infoHash, 28, 20, 'hex')
+    buff.write(this.torrent.infoHash, 28, 20, 'hex')
     if (this.id) buff.write(this.id, 48, 20, 'ascii')
     this.client.write(buff, (err) => {
+      this.connectionTimeout = setTimeout(() => {
+        this.disconnect('timeout')
+      }, HANDSHAKE_MAX_TIME)
       console.log('Connection request sent to peer ', this.id)
       if (err) {
         console.error('Error sending handshake: ', err)
@@ -65,7 +77,7 @@ export class Peer extends EventEmitter {
   }
 
   sendKeepAlive () {
-    this.client.write(buildKeepAliveMessage)
+    this.client.write(buildKeepAliveMessage())
   }
 
   choke() {
@@ -75,11 +87,53 @@ export class Peer extends EventEmitter {
 
   unchoke() {
     this.choked = false
-    // TO DO: request piece
+    this.requestNextBlock()
   }
 
-  requestPiece(pieceIndex) {
+  setAvailablePieces(availablePieces) {
+    this._availablePieces = availablePieces
+    this.torrent.addPiecesToQueue(availablePieces)
+  }
 
+  requestNextBlock() {
+    for(let i in this._availablePieces) {
+      const pieceBlock = this.torrent.getBlockFromQueue(this._availablePieces[i])
+      // If piece is not in queue go to next piece
+      if(!pieceBlock) continue
+
+      this._requestBlock(pieceBlock)
+
+      this.requested = pieceBlock
+      break
+    }
+    console.log('REQUESTED PIECE ', this.requested)
+  }
+
+  _handlePiece(payload) {
+    // if is the last block of the current piece, do not continue asking for the piece
+    const blockIndex = this.requested.begin / BLOCK_LENGTH
+    console.log(`Received block ${this.requested.begin / BLOCK_LENGTH} of piece ${this.requested.index}`)
+    if(this.torrent.isLastBlockOfPiece(this.requested.index, blockIndex)) {
+      this._availablePieces.splice(this._availablePieces.indexOf(requested.index), 1)
+    }
+
+    this.requested = null
+    ///// write to file
+
+    this.requestNextBlock()
+  }
+
+  _requestBlock(block) {
+    if(this.choked) return false
+
+    const buf = Buffer.alloc(17)
+    buf.writeUInt32BE(13, 0)
+    buf.writeUInt8(6, 4)
+    buf.writeUInt32BE(block.index, 5)
+    buf.writeUInt32BE(block.begin, 9)
+    buf.writeUInt32BE(block.length, 13)
+
+    this.client.write(buf)
   }
 
   disconnect (reason, data) {
@@ -95,7 +149,10 @@ export class Peer extends EventEmitter {
  * @param {Buffer} data
  */
 function handleMessage (peer, data) {
-  console.log('Data received from peer: ', data)
+  
+  clearTimeout(peer.connectionTimeout)
+  peer.connectionTimeout = null
+  
   if (!peer.handshakeAchieved) {
     validateHandshake(peer, data)
   } else {
@@ -115,11 +172,10 @@ function handleMessage (peer, data) {
  * @returns {boolean}
  */
 function validateHandshake (peer, data) {
-  if (!isTheSameInfoHash(data.subarray(28, 48), peer.infoHash)) {
+  if (!isTheSameInfoHash(data.subarray(28, 48), peer.torrent.infoHash)) {
     console.error(`Error connecting to peer ${peer.id}: Invalid info_hash`)
     throw new Error(`Error connecting to peer ${peer.id}: Invalid info_hash`)
   } else {
-    clearTimeout(peer.connectionTimeout)
     peer.handshakeAchieved = true
     console.log('Connected to peer ', peer.id)
   }

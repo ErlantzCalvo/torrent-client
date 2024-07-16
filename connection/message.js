@@ -1,5 +1,6 @@
 import { Peer } from './peer.js'
 import { bytesToDecimal } from '../utils.js'
+import colors from 'colors'
 
 const MESSAGE_TYPES = {
   CHOKE: 0,
@@ -20,6 +21,8 @@ const MESSAGE_TYPES = {
  */
 export function handlePeerMessage (data, peer) {
   const message = parseMessage(data)
+  console.log(colors.cyan('Message received from peer: ', message.id))
+
   switch (message.id) {
     case MESSAGE_TYPES.CHOKE:
       peer.choke()
@@ -34,11 +37,13 @@ export function handlePeerMessage (data, peer) {
     case MESSAGE_TYPES.HAVE:
       break
     case MESSAGE_TYPES.BITFIELD:
-      bitfieldHandler(message.payload)
+      const availablePieces = bitfieldHandler(message.payload)
+      peer.setAvailablePieces(availablePieces)
       break
     case MESSAGE_TYPES.REQUEST:
       break
     case MESSAGE_TYPES.PIECE:
+      peer._handlePiece(message.payload)
       break
     case MESSAGE_TYPES.CANCEL:
       break
@@ -68,11 +73,22 @@ export function buildKeepAliveMessage () {
   return Buffer.alloc(4)
 }
 
+/**
+ * Get peer's available pieces
+ * @param {Buffer} payload 
+ * @returns {number[]} Array of pieces' indexes available
+ */
 function bitfieldHandler (payload) {
+  const pieces = []
   payload.forEach((byte, i) => {
     for (let j = 0; j < 8; j++) {
-      if (byte % 2) console.log(byte)
+      if (byte % 2) {
+        // has piece i * 8 + 7 - j
+        pieces.push(i * 8 + 7 - j)
+      }
       byte = Math.floor(byte / 2)
     }
   })
+
+  return pieces
 }

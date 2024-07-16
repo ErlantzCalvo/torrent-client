@@ -5,11 +5,17 @@ import { createHash, randomBytes } from 'node:crypto'
 import { hexUrlEncoding } from '../utils.js'
 import { createSocket } from 'node:dgram'
 import { URL } from 'node:url'
+import { Pieces } from './pieces.js'
+import { Queue } from '../managers/queue.js'
+import { BLOCK_LENGTH } from '../constants.js'
+
 
 export class TorrentInfo {
   constructor (path, verbose) {
     if (path) {
       this.createTorrentFromFile(path)
+      this._pieces = new Pieces(this.getPiecesNumber())
+      this._queue = new Queue(this)
       if (verbose) { this.printInfo() }
     }
   }
@@ -40,6 +46,74 @@ export class TorrentInfo {
     } else {
         return -1
     }
+  }
+
+  /**
+   * returns the size of the given piece in Bytes
+   * @param {number} pieceIndex 
+   */
+  getPieceLength(pieceIndex) {
+    if(!this.info) return -1
+
+    const pieceLength = this.info['piece length']
+    if(pieceIndex < this.getPiecesNumber()) {
+      return pieceLength
+    } else {
+      // return the length of the last piece
+      return this.info.length % pieceLength
+    }
+
+  }
+
+  /**
+   * returns the size of the given block for the given piece in Bytes
+   * @param {number} blockIndex 
+   */
+  getBlockLength(pieceIndex, blockIndex) {
+    if(!this.info) return -1
+
+    const pieceLength = this.getPieceLength(pieceIndex)
+    const lastPieceLength = pieceLength % BLOCK_LENGTH;
+    const lastPieceIndex = Math.floor(pieceLength / this.BLOCK_LEN);
+   
+    if(blockIndex === lastPieceIndex) {
+      return lastPieceLength
+    } else {
+      return BLOCK_LENGTH
+    }
+
+  }
+
+  getBlocksPerPiece = (pieceIndex) => {
+    const pieceLength = this.getPieceLength(pieceIndex);
+    return Math.ceil(pieceLength / BLOCK_LENGTH);
+  }
+
+  /**
+   * 
+   * @returns the total number of block that compose this torrent
+   */
+  getBlocksNumber() {
+    return Math.floor(this.info.length / BLOCK_LENGTH);
+  }
+
+  getBlockFromQueue(pieceIndex) {
+    return this._queue.popPieceBlock(pieceIndex)
+  }
+
+  /**
+   * Add pieces to queue if the pieces are not already there
+   * @param {number[]} pieces 
+   */
+  addPiecesToQueue(pieces) {
+    for(let piece of pieces) {
+      if(!this._queue.has(piece)) this._queue.push(piece)
+    }
+  }
+
+  isLastBlockOfPiece(pieceIndex, blockIndex) {
+    const blocksNumber = this.getBlocksPerPiece(pieceIndex)
+    return blockIndex === (blocksNumber - 1)
   }
 
   printInfo () {
