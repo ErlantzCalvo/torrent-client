@@ -62,16 +62,18 @@ export class DownloadManager {
   
     peer.on('timeout', () => {
       console.log(colors.yellow('Peer timeout: ', peerIdx))
-      this._finishPeerConnection(peerIdx)
-      this.refreshPeerConnections()
+      this._handlePeerDisconnect(peerIdx)
     })
   
-    peer.on('peer-error', (error) => {
-      this._finishPeerConnection(peerIdx)
-      this.refreshPeerConnections()
-    })
+    peer.on('peer-error', () => this._handlePeerDisconnect(peerIdx))
+    peer.on('choked', () => this._handlePeerDisconnect(peerIdx))
   
     return peer
+  }
+
+  _handlePeerDisconnect(peerIdx) {
+    this._finishPeerConnection(peerIdx)
+    this.refreshPeerConnections()
   }
 
   _getPeer (peerIdx) {
