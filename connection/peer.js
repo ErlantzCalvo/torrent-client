@@ -9,12 +9,12 @@ const SOCKET_CONNECTION_MAX_TIME = 15000 // 15s
 const HANDSHAKE_MAX_TIME = 5000 // 5s
 export class Peer extends EventEmitter {
   /**
-   * 
-   * @param {string} ip 
-   * @param {number} port 
-   * @param {string} id 
-   * @param {TorrentInfo} torrent 
-   * @param {Queue} piecesQueue 
+   *
+   * @param {string} ip
+   * @param {number} port
+   * @param {string} id
+   * @param {TorrentInfo} torrent
+   * @param {Queue} piecesQueue
    */
   constructor (ip, port, id, torrent, piecesQueue) {
     super()
@@ -58,7 +58,7 @@ export class Peer extends EventEmitter {
   }
 
   sendHandshake () {
-    if (this.client.readyState !== 'open') return this.disconnect('peer-error', "Error making handshake request: socket connection is closed")
+    if (this.client.readyState !== 'open') return this.disconnect('peer-error', 'Error making handshake request: socket connection is closed')
 
     const buff = Buffer.alloc(68, '', 'hex')
     buff.writeUInt8(19)
@@ -80,26 +80,26 @@ export class Peer extends EventEmitter {
     this.client.write(buildKeepAliveMessage())
   }
 
-  choke() {
+  choke () {
     this.choked = true
-    this.disconnect('choked');
+    this.disconnect('choked')
   }
 
-  unchoke() {
+  unchoke () {
     this.choked = false
     this.requestNextBlock()
   }
 
-  setAvailablePieces(availablePieces) {
+  setAvailablePieces (availablePieces) {
     this._availablePieces = availablePieces
     this.torrent.addPiecesToQueue(availablePieces)
   }
 
-  requestNextBlock() {
-    for(let i in this._availablePieces) {
+  requestNextBlock () {
+    for (const i in this._availablePieces) {
       const pieceBlock = this.torrent.getBlockFromQueue(this._availablePieces[i])
       // If piece is not in queue go to next piece
-      if(!pieceBlock) continue
+      if (!pieceBlock) continue
 
       this._requestBlock(pieceBlock)
 
@@ -109,22 +109,22 @@ export class Peer extends EventEmitter {
     console.log('REQUESTED PIECE ', this.requested)
   }
 
-  _handlePiece(payload) {
+  _handlePiece (payload) {
     // if is the last block of the current piece, do not continue asking for the piece
     const blockIndex = this.requested.begin / BLOCK_LENGTH
     console.log(`Received block ${blockIndex + 1}/${this.torrent.getBlocksPerPiece(this.requested.index)} of piece ${this.requested.index}`)
-    if(this.torrent.isLastBlockOfPiece(this.requested.index, blockIndex)) {
-      this._availablePieces.splice(this._availablePieces.indexOf(requested.index), 1)
+    if (this.torrent.isLastBlockOfPiece(this.requested.index, blockIndex)) {
+      this._availablePieces.splice(this._availablePieces.indexOf(this.requested.index), 1)
     }
 
     this.requested = null
-    ///// write to file
+    /// // write to file
 
     this.requestNextBlock()
   }
 
-  _requestBlock(block) {
-    if(this.choked) return false
+  _requestBlock (block) {
+    if (this.choked) return false
 
     const buf = Buffer.alloc(17)
     buf.writeUInt32BE(13, 0)
@@ -138,7 +138,7 @@ export class Peer extends EventEmitter {
 
   disconnect (reason, data) {
     clearInterval(this.keepAliveInterval)
-    if(reason) this.emit(reason, data)
+    if (reason) this.emit(reason, data)
     this.client.end()
   }
 }
@@ -149,10 +149,9 @@ export class Peer extends EventEmitter {
  * @param {Buffer} data
  */
 function handleMessage (peer, data) {
-  
   clearTimeout(peer.connectionTimeout)
   peer.connectionTimeout = null
-  
+
   if (!peer.handshakeAchieved) {
     validateHandshake(peer, data)
   } else {

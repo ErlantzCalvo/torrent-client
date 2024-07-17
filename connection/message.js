@@ -75,7 +75,7 @@ export function buildKeepAliveMessage () {
 
 /**
  * Get peer's available pieces
- * @param {Buffer} payload 
+ * @param {Buffer} payload
  * @returns {number[]} Array of pieces' indexes available
  */
 function bitfieldHandler (payload) {
