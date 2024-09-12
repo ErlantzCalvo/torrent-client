@@ -1,4 +1,4 @@
-import { Peer } from './peer.js'
+import { Peer } from './peer.js' // eslint-disable-line
 import { bytesToDecimal } from '../utils.js'
 import colors from 'colors'
 
@@ -21,7 +21,7 @@ const MESSAGE_TYPES = {
  */
 export function handlePeerMessage (data, peer) {
   const message = parseMessage(data)
-  console.log(colors.cyan('Message received from peer: ', message.id))
+  console.log(colors.cyan('Message received from peer: ', getMessageTypeById(message.id)))
 
   switch (message.id) {
     case MESSAGE_TYPES.CHOKE:
@@ -34,12 +34,20 @@ export function handlePeerMessage (data, peer) {
       break
     case MESSAGE_TYPES.NOT_INTERESTED:
       break
-    case MESSAGE_TYPES.HAVE:
+    case MESSAGE_TYPES.HAVE: {
+      const availablePiece = haveHandler(message.payload)
+      peer.addAvailablePiece(availablePiece)
       break
-    case MESSAGE_TYPES.BITFIELD:
-      const availablePieces = bitfieldHandler(message.payload)
-      peer.setAvailablePieces(availablePieces)
+    }
+    case MESSAGE_TYPES.BITFIELD: {
+      if(message.size === (message.payload.length + 1)) {
+        const availablePieces = bitfieldHandler(message.payload)
+        peer.setAvailablePieces(availablePieces)
+      } else {
+        peer.disconnect('peer-error', 'wrong bitfield size')
+      }
       break
+    }
     case MESSAGE_TYPES.REQUEST:
       break
     case MESSAGE_TYPES.PIECE:
@@ -78,6 +86,16 @@ export function buildKeepAliveMessage () {
  * @param {Buffer} payload
  * @returns {number[]} Array of pieces' indexes available
  */
+function haveHandler (payload) {
+  console.log('---- HAVE -->', payload)
+
+}
+
+/**
+ * Get peer's available pieces
+ * @param {Buffer} payload
+ * @returns {number[]} Array of pieces' indexes available
+ */
 function bitfieldHandler (payload) {
   const pieces = []
   payload.forEach((byte, i) => {
@@ -91,4 +109,8 @@ function bitfieldHandler (payload) {
   })
 
   return pieces
+}
+
+function getMessageTypeById(msgId) {
+  return Object.keys(MESSAGE_TYPES).find(type => MESSAGE_TYPES[type] === msgId)
 }
