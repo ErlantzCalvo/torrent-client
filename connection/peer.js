@@ -1,8 +1,8 @@
 import EventEmitter from 'node:events'
 import { createConnection } from 'node:net'
 import { buildKeepAliveMessage, handlePeerMessage } from './message.js'
-import { TorrentInfo } from '../torrent/torrentInfo.js'
-import { Queue } from '../managers/queue.js'
+import { TorrentInfo } from '../torrent/torrentInfo.js' // eslint-disable-line
+import { Queue } from '../managers/queue.js' // eslint-disable-line
 import { BLOCK_LENGTH } from '../constants.js'
 
 const SOCKET_CONNECTION_MAX_TIME = 15000 // 15s
@@ -95,6 +95,12 @@ export class Peer extends EventEmitter {
     this.torrent.addPiecesToQueue(availablePieces)
   }
 
+  addAvailablePiece (piece) {
+    if (this._availablePieces.some(p => p === piece)) return // piece is already added
+    this._availablePieces.push(piece)
+    this.torrent.addPiecesToQueue([piece])
+  }
+
   requestNextBlock () {
     for (const i in this._availablePieces) {
       const pieceBlock = this.torrent.getBlockFromQueue(this._availablePieces[i])
@@ -173,7 +179,7 @@ function handleMessage (peer, data) {
 function validateHandshake (peer, data) {
   if (!isTheSameInfoHash(data.subarray(28, 48), peer.torrent.infoHash)) {
     console.error(`Error connecting to peer ${peer.id}: Invalid info_hash`)
-    throw new Error(`Error connecting to peer ${peer.id}: Invalid info_hash`)
+    peer.disconnect('peer-error', 'wrong-handshake')
   } else {
     peer.handshakeAchieved = true
     console.log('Connected to peer ', peer.id)
