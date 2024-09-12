@@ -144,7 +144,7 @@ function isUdpRequest (urlStr) {
 async function fetchHttpAnnounce (domain, port, infoHash) {
   const connectionPort = port || 6881
   const infoHashEncoded = hexUrlEncoding(infoHash)
-  const url = `${domain}?info_hash=${infoHashEncoded}&peer_id=-TR2940-k8hj0erlnatz&port=${connectionPort}`
+  const url = `${domain}?info_hash=${infoHashEncoded}&peer_id=-TR2940-k8hj0erlantz&port=${connectionPort}`
   return fetch(url)
     .then(res => res.text())
     .then(text => {

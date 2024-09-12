@@ -1,5 +1,5 @@
 import { Peer } from '../connection/peer.js'
-import { TorrentInfo } from '../torrent/torrentInfo.js'
+import { TorrentInfo } from '../torrent/torrentInfo.js' // eslint-disable-line
 import colors from 'colors'
 
 export class DownloadManager {

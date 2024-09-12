@@ -1,4 +1,4 @@
-import { TorrentInfo } from '../torrent/torrentInfo.js'
+import { TorrentInfo } from '../torrent/torrentInfo.js' // eslint-disable-line
 import { BLOCK_LENGTH } from '../constants.js'
 
 export class Queue {
