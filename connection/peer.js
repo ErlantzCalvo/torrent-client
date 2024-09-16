@@ -1,4 +1,5 @@
 import EventEmitter from 'node:events'
+import fs from 'node:fs'
 import { createConnection } from 'node:net'
 import { buildKeepAliveMessage, handlePeerMessage } from './message.js'
 import { TorrentInfo } from '../torrent/torrentInfo.js' // eslint-disable-line
@@ -96,19 +97,21 @@ export class Peer extends EventEmitter {
   }
 
   addAvailablePiece (piece) {
-    if (this._availablePieces.some(p => p === piece)) return // piece is already added
     this._availablePieces.push(piece)
     this.torrent.addPiecesToQueue([piece])
   }
 
   requestNextBlock () {
-    for (const i in this._availablePieces) {
-      const pieceBlock = this.torrent.getBlockFromQueue(this._availablePieces[i])
-      // If piece is not in queue go to next piece
-      if (!pieceBlock) continue
+    for (let piece = 0; piece < this._availablePieces.length; piece++) {
+
+      const pieceBlock = this.torrent.getAvailableBlockFromQueue(piece)
+      
+      // If piece is not in queue or is already processed go to next piece
+      const pieceBlockIsAvailable = pieceBlock && !pieceBlock.requested && !pieceBlock.downloaded
+      if (!pieceBlockIsAvailable) continue
 
       this._requestBlock(pieceBlock)
-
+      pieceBlock.setRequested(20_000);
       this.requested = pieceBlock
       break
     }
@@ -123,6 +126,10 @@ export class Peer extends EventEmitter {
       this._availablePieces.splice(this._availablePieces.indexOf(this.requested.index), 1)
     }
 
+    fs.write(this.torrent.file, payload, 0, payload.length, blockIndex, (err)=>{
+      if(err) console.error(err)
+    })
+    this.requested.setDownloaded()
     this.requested = null
     /// // write to file
 

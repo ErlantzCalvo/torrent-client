@@ -25,7 +25,7 @@ export class DownloadManager {
   }
 
   async fetchPeersList () {
-    this.peersListInfo = await this._torrent.makeAnnounceRequest()
+    this.peersListInfo = await this._torrent.requestTorrentPeers()
   }
 
   async refreshPeers () {
@@ -35,7 +35,7 @@ export class DownloadManager {
 
   refreshPeerConnections () {
     const remainingConnections = this.maxPeersNumber - this._connectedPeersNumber
-    for (let i = 0; i < remainingConnections; i++) {
+    for (let i = 0; i < remainingConnections && i < this.peersListInfo.peers.length; i++) {
       const newPeer = this._connectPeer(this._lastPeerIndex, this.peersListInfo)
       this._connectedPeers[this._lastPeerIndex] = newPeer
       this._increasePeerIndex()

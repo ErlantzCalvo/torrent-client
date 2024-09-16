@@ -23,7 +23,7 @@ export class Queue {
         // index is the piece index
         // begin is the block number of the piece + the size of the block
         // the length is the size of the block
-        this._queue.push(new BlockInfo(pieceIndex, j * BLOCK_LENGTH, this.torrent.getBlockLength(pieceIndex, j)))
+        this._queue.push(new BlockInfo(pieceIndex, j * BLOCK_LENGTH, this.torrent.getBlockLength(pieceIndex, j), false, false))
       }
     }
   }
@@ -33,14 +33,28 @@ export class Queue {
      * @returns {BlockInfo} blocks of the first piece
      */
   popPieceBlock (pieceIndex) {
-    const idx = this._queue.findIndex(block => block.index === pieceIndex)
+    const idx = this._queue.findIndex(block => block.index === pieceIndex && !block.requested && !block.downloaded)
     if (idx > -1) {
-      const block = this._queue[idx]
-      this._queue.splice(idx, 1)
-      return block
+      return this._queue[idx]
     } else {
       return null
     }
+  }
+
+  setBlockRequested(blockInfo, timeout) {
+    const block = this._queue.find(block => block.index === blockInfo.index && block.begin === blockInfo.begin)
+    if(block) block.requested = true
+
+    if(timeout) {
+      setTimeout(() => {
+        block.requested = false
+      }, timeout)
+    }
+  }
+
+  setBlockDownloaded(blockInfo) {
+    const block = this._queue.find(block => block.index === blockInfo.index && block.begin === blockInfo.begin)
+    if(block) block.downloaded = true
   }
 
   pop () {
@@ -50,12 +64,32 @@ export class Queue {
   has (pieceIndex) {
     return this._queue.some(piece => piece.index === pieceIndex)
   }
+
 }
 
+
 class BlockInfo {
-  constructor (index, begin, length) {
+  constructor (index, begin, length, requested, downloaded) {
     this.index = index
     this.begin = begin
     this.length = length
+    this.requested = requested
+    this.downloaded = downloaded
+    this._requestTimeout = null
+  }
+
+  setRequested(timeout) {
+    this.requested = true
+
+    if(timeout) {
+      this._requestTimeout = setTimeout(() => {
+        this.requested = false
+      }, timeout)
+    }
+  }
+
+  setDownloaded() {
+    this.downloaded = true
+    clearTimeout(this._requestTimeout)
   }
 }

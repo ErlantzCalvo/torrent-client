@@ -97,12 +97,12 @@ function haveHandler (payload) {
  * @returns {number[]} Array of pieces' indexes available
  */
 function bitfieldHandler (payload) {
-  const pieces = []
+  const pieces = new Array(payload.length * 8)
   payload.forEach((byte, i) => {
     for (let j = 0; j < 8; j++) {
       if (byte % 2) {
         // has piece i * 8 + 7 - j
-        pieces.push(i * 8 + 7 - j)
+        pieces[i * 8 + 7 - j] = 1
       }
       byte = Math.floor(byte / 2)
     }
