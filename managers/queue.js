@@ -78,12 +78,13 @@ class BlockInfo {
     this._requestTimeout = null
   }
 
-  setRequested(timeout) {
+  setRequested(timeout, callback) {
     this.requested = true
 
     if(timeout) {
       this._requestTimeout = setTimeout(() => {
         this.requested = false
+        callback()
       }, timeout)
     }
   }

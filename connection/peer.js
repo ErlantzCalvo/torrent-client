@@ -111,7 +111,7 @@ export class Peer extends EventEmitter {
       if (!pieceBlockIsAvailable) continue
 
       this._requestBlock(pieceBlock)
-      pieceBlock.setRequested(20_000);
+      pieceBlock.setRequested(20_000, () => this.disconnect('block-request-timeout'));
       this.requested = pieceBlock
       break
     }
@@ -121,12 +121,10 @@ export class Peer extends EventEmitter {
   _handlePiece (payload) {
     // if is the last block of the current piece, do not continue asking for the piece
     const blockIndex = this.requested.begin / BLOCK_LENGTH
+    const offset = this.requested.index * this.torrent.getPieceLength() + this.requested.begin
     console.log(`Received block ${blockIndex + 1}/${this.torrent.getBlocksPerPiece(this.requested.index)} of piece ${this.requested.index}`)
-    if (this.torrent.isLastBlockOfPiece(this.requested.index, blockIndex)) {
-      this._availablePieces.splice(this._availablePieces.indexOf(this.requested.index), 1)
-    }
 
-    fs.write(this.torrent.file, payload, 0, payload.length, blockIndex, (err)=>{
+    fs.write(this.torrent.file, payload, 0, payload.length, offset, (err)=>{
       if(err) console.error(err)
     })
     this.requested.setDownloaded()
