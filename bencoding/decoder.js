@@ -27,30 +27,37 @@ function parseField (buffer) {
     case SPECIAL_CHARS.START.LIST:
       return buildList(buffer)
     default:
-      if (asString) return getStringBuffer(buffer, position).toString()
-      return getStringBuffer(buffer, position)
+      if (asString) return getStringBuffer(buffer).toString()
+      return getStringBuffer(buffer)
   }
 }
 
 function buildDictionary (buffer) {
   const dict = {}
   position++
+  let isValid = true
   while (buffer.at(position) !== SPECIAL_CHARS.END) {
-    const dictPropertyName = getStringBuffer(buffer).toString()
-    asString = dictPropertyName !== 'pieces'
-    const propertyValue = parseField(buffer)
-    dict[dictPropertyName] = propertyValue
+    try {
+      const dictPropertyName = getStringBuffer(buffer).toString()
+      asString = dictPropertyName !== 'pieces'
+      const propertyValue = parseField(buffer)
+      dict[dictPropertyName] = propertyValue
+    } catch(err) {
+      position = findNextCharPosition(buffer, SPECIAL_CHARS.END) + 1
+      isValid = false
+    }
   }
 
   position++
-  return dict
+  return isValid ? dict : null
 }
 
 function buildList (buffer) {
   const list = []
   position++
   while (buffer.at(position) !== SPECIAL_CHARS.END) {
-    list.push(parseField(buffer))
+      let item = parseField(buffer)
+      if(item) list.push(item)
   }
   position++
   return list
@@ -108,6 +115,7 @@ function getIntFromBuffer (buffer, start, end) {
 
 function findNextCharPosition (buffer, char) {
   let currPos = position
-  while (buffer.at(currPos) !== char) currPos++
+  while (buffer.at(currPos) !== char && currPos < buffer.length) currPos++
+  if(currPos > buffer.length) throw new Error('Invalid buffer')
   return currPos
 }
