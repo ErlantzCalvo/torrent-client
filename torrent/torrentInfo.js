@@ -5,7 +5,6 @@ import { createHash, randomBytes } from 'node:crypto'
 import { hexUrlEncoding } from '../utils.js'
 import { createSocket } from 'node:dgram'
 import { URL } from 'node:url'
-import { Pieces } from './pieces.js'
 import { Queue } from '../managers/queue.js'
 import { BLOCK_LENGTH } from '../constants.js'
 
@@ -13,8 +12,11 @@ export class TorrentInfo {
   constructor (path, verbose) {
     if (path) {
       this.createTorrentFromFile(path)
-      this._pieces = new Pieces(this.getPiecesNumber())
       this._queue = new Queue(this)
+      this.file = createFile(this.info)
+      this._totalBytes = getTotalBytesLength(this.info)
+      this._downloadedBytes = 0
+
       if (verbose) { this.printInfo() }
     }
   }
@@ -26,16 +28,29 @@ export class TorrentInfo {
     const infoBencoded = encode(torrentObject.info)
     const infoHash = createHash('sha1').update(infoBencoded).digest('hex')
     torrentObject.infoHash = infoHash
+    console.log(torrentObject.info)
     Object.assign(this, torrentObject)
   }
 
-  async makeAnnounceRequest (port) {
-    if (isHttpRequest(this.announce)) {
-      return fetchHttpAnnounce(this.announce, port, this.infoHash)
-    } else if (isUdpRequest(this.announce)) {
-      return fetchUdpAnnounce(this.announce, port, this.infoHash)
-    } else {
-      throw new Error('Unknwon announcer protocol')
+  async requestTorrentPeers (port) {
+    let announceUrls = [this.announce]
+    if(this['announce-list']) {
+      announceUrls = this['announce-list']
+    }
+    for(const announceUrl of announceUrls) {
+      let result
+      try {
+        console.log('requesting ' + announceUrl)
+        result = await makeAnnounceRequest(announceUrl, port, this.infoHash)
+        return result
+      } catch (error) {
+        // console.error('no success:', error)
+      }
+    }
+
+    return {
+      interval: 900000,
+      peers: []
     }
   }
 
@@ -94,7 +109,7 @@ export class TorrentInfo {
     return Math.floor(this.info.length / BLOCK_LENGTH)
   }
 
-  getBlockFromQueue (pieceIndex) {
+  getAvailableBlockFromQueue (pieceIndex) {
     return this._queue.popPieceBlock(pieceIndex)
   }
 
@@ -103,14 +118,24 @@ export class TorrentInfo {
    * @param {number[]} pieces
    */
   addPiecesToQueue (pieces) {
-    for (const piece of pieces) {
-      if (!this._queue.has(piece)) this._queue.push(piece)
+    for(let piece = 0; piece < pieces.length; piece++) {
+      if (!this._queue.has(piece) && pieces[piece] === 1) this._queue.push(piece)
     }
   }
 
   isLastBlockOfPiece (pieceIndex, blockIndex) {
     const blocksNumber = this.getBlocksPerPiece(pieceIndex)
     return blockIndex === (blocksNumber - 1)
+  }
+
+  setDownloadedPercentage(bytes) {
+    this._downloadedBytes += bytes 
+    this._printDownloadProgress()
+  }
+
+  _printDownloadProgress() {
+    const percentage = (this._downloadedBytes / this._totalBytes) * 100
+    console.log(colors.magenta(`Download progress: ${percentage.toFixed(3)}%`))
   }
 
   printInfo () {
@@ -141,6 +166,17 @@ function isUdpRequest (urlStr) {
   return url.protocol === 'udp:'
 }
 
+function makeAnnounceRequest(url, port, infoHash) {
+  if (isHttpRequest(url)) {
+    return fetchHttpAnnounce(url, port, infoHash)
+  } else if (isUdpRequest(url)) {
+    return fetchUdpAnnounce(url, port, infoHash)
+  } else {
+    throw new Error('Unknwon announcer protocol')
+  }
+}
+
+
 async function fetchHttpAnnounce (domain, port, infoHash) {
   const connectionPort = port || 6881
   const infoHashEncoded = hexUrlEncoding(infoHash)
@@ -149,35 +185,38 @@ async function fetchHttpAnnounce (domain, port, infoHash) {
     .then(res => res.text())
     .then(text => {
       const buffer = Buffer.from(text, 'ascii')
-      const result = decode(buffer)
-      return result
+      return decode(buffer)
     })
-    .catch(err => console.log(err))
 }
 
 async function fetchUdpAnnounce (domain, port, infoHash) {
-  const client = createSocket('udp4')
-
-  const url = new URL(domain)
-  const message = buildUdpRequest()
-  client.on('message', function (data) {
-    console.log(data)
-    const response = data.readUInt32BE(0)
-    if (response === 0) { // connect
-
-    } else if (response === 1) { // announce
-
-    }
-  })
-
-  client.on('error', function (err) {
-    console.error(err)
-    this.close()
-  })
-
-  client.send(message, 0, message.length, url.port, url.hostname, function (err, res) {
-    if (err) throw new Error('UDP connection error')
-    console.log('UDP connection succed', res)
+  return new Promise((resolve, reject) => {
+    
+    const url = new URL(domain)
+    const message = buildUdpRequest()
+    const client = createSocket('udp4')
+    
+    client.on('error', function (err) {
+      console.error(err)
+      this.close()
+      reject(err)
+    })
+    
+    client.send(message, 0, message.length, url.port, url.host, function (err, res) {
+      if (err) reject('UDP connection error')
+      else console.log('UDP connection succed', res)
+    })
+    
+    client.on('message', function (data) {
+      const response = data.readUInt32BE(0)
+      if (response === 0) { // connect
+  
+      } else if (response === 1) { // announce
+  
+      }
+      resolve(data)
+  
+    })
   })
 }
 
@@ -195,4 +234,36 @@ function buildUdpRequest () {
   randomBytes(4).copy(buffer, 12)
   console.log(buffer)
   return buffer
+}
+
+function createFile(torrentInfo) {
+  const dir = 'Downloads'
+  if (!fs.existsSync(dir)){
+    fs.mkdirSync(dir);
+  }
+
+  if (torrentInfo.files) {
+    torrentInfo.files.forEach(file => {
+      const fileName = file.path?.pop()
+      const filePath = file.path?.join('/')
+      fs.mkdirSync(dir + "/" +filePath, {recursive: true})
+      return fs.openSync(dir + "/" +filePath + '/' + fileName, 'w')
+    })
+  } else {
+    return fs.openSync(dir + '/' + torrentInfo.name, 'w')
+  }
+
+}
+
+function getTotalBytesLength(torrentInfo) {
+  if (torrentInfo.files) {
+    let size = 0
+    torrentInfo.files.forEach(file => {
+      size += file.length
+    })
+
+    return size
+  } else {
+    return torrentInfo.length
+  }
 }

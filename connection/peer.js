@@ -121,15 +121,15 @@ export class Peer extends EventEmitter {
   _handlePiece (payload) {
     // if is the last block of the current piece, do not continue asking for the piece
     const blockIndex = this.requested.begin / BLOCK_LENGTH
-    const offset = this.requested.index * this.torrent.getPieceLength() + this.requested.begin
-    console.log(`Received block ${blockIndex + 1}/${this.torrent.getBlocksPerPiece(this.requested.index)} of piece ${this.requested.index}`)
+    const offset = this.requested.index * this.torrent.getPieceLength(this.requested.index) + this.requested.begin
+    console.log(`Received block ${blockIndex + 1}/${this.torrent.getBlocksPerPiece(this.requested.index)} of piece ${this.requested.index} (offset: ${offset})`)
 
     fs.write(this.torrent.file, payload, 0, payload.length, offset, (err)=>{
       if(err) console.error(err)
     })
     this.requested.setDownloaded()
+    this.torrent.setDownloadedPercentage(this.requested.length)
     this.requested = null
-    /// // write to file
 
     this.requestNextBlock()
   }
