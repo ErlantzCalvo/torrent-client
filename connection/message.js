@@ -1,6 +1,7 @@
 import { Peer } from './peer.js' // eslint-disable-line
 import { bytesToDecimal } from '../utils.js'
 import colors from 'colors'
+import { logMessageReceived } from '../logger/logger.js'
 
 const MESSAGE_TYPES = {
   CHOKE: 0,
@@ -21,7 +22,7 @@ const MESSAGE_TYPES = {
  */
 export function handlePeerMessage (data, peer) {
   const message = parseMessage(data)
-  console.log(colors.cyan('Message received from peer: ', getMessageTypeById(message.id)))
+  logMessageReceived(`Message received from peer: ${getMessageTypeById(message.id)} ${message.id}`)
 
   switch (message.id) {
     case MESSAGE_TYPES.CHOKE:
