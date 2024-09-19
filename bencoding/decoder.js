@@ -42,7 +42,7 @@ function buildDictionary (buffer) {
       asString = dictPropertyName !== 'pieces'
       const propertyValue = parseField(buffer)
       dict[dictPropertyName] = propertyValue
-    } catch(err) {
+    } catch (err) {
       position = findNextCharPosition(buffer, SPECIAL_CHARS.END) + 1
       isValid = false
     }
@@ -56,8 +56,8 @@ function buildList (buffer) {
   const list = []
   position++
   while (buffer.at(position) !== SPECIAL_CHARS.END) {
-      let item = parseField(buffer)
-      if(item) list.push(item)
+    const item = parseField(buffer)
+    if (item) list.push(item)
   }
   position++
   return list
@@ -116,6 +116,6 @@ function getIntFromBuffer (buffer, start, end) {
 function findNextCharPosition (buffer, char) {
   let currPos = position
   while (buffer.at(currPos) !== char && currPos < buffer.length) currPos++
-  if(currPos > buffer.length) throw new Error('Invalid buffer')
+  if (currPos > buffer.length) throw new Error('Invalid buffer')
   return currPos
 }

@@ -1,6 +1,6 @@
 import { Peer } from '../connection/peer.js'
 import { TorrentInfo } from '../torrent/torrentInfo.js' // eslint-disable-line
-import colors from 'colors'
+import * as logger from '../logger/logger.js'
 
 export class DownloadManager {
   /**
@@ -14,8 +14,8 @@ export class DownloadManager {
     this.peersListInfo = null
     this._connectedPeers = {}
     this._connectedPeersNumber = 0
-    this._lastPeerIndex = 0
     this._refreshPeersInterval = null
+    this._availablePeersIndexes = []
   }
 
   async start () {
@@ -26,20 +26,24 @@ export class DownloadManager {
 
   async fetchPeersList () {
     this.peersListInfo = await this._torrent.requestTorrentPeers()
+    this.maxPeersNumber = Math.min(this.maxPeersNumber, this.peersListInfo.peers.length)
   }
 
   async refreshPeers () {
+    this._closeAllPeersConections()
+    this._connectedPeers = {}
+    this._connectedPeersNumber = 0
+
     await this.fetchPeersList()
+    this._availablePeersIndexes = Array.from(this.peersListInfo.peers, (_, idx) => idx)
     this.refreshPeerConnections()
   }
 
   refreshPeerConnections () {
-    const remainingConnections = this.maxPeersNumber - this._connectedPeersNumber
-    for (let i = 0; i < remainingConnections && i < this.peersListInfo.peers.length; i++) {
-      const newPeer = this._connectPeer(this._lastPeerIndex, this.peersListInfo)
-      this._connectedPeers[this._lastPeerIndex] = newPeer
-      this._increasePeerIndex()
-      this._connectedPeersNumber++
+    const remainingConnections = Math.min(this.maxPeersNumber - this._connectedPeersNumber, this._availablePeersIndexes.length)
+    for (let i = 0; i < remainingConnections; i++) {
+      const peerIdx = this._availablePeersIndexes.shift()
+      this._connectPeer(peerIdx)
     }
   }
 
@@ -48,29 +52,42 @@ export class DownloadManager {
     this._closeAllPeersConections()
   }
 
-  _increasePeerIndex () {
-    this._lastPeerIndex++
-    if (this._lastPeerIndex >= this.peersListInfo.peers.length) this._lastPeerIndex = 0
-  }
-
   _connectPeer (peerIdx) {
-    console.log('Connecting to peer ', peerIdx)
+    logger.info(`Connecting to peer: ${peerIdx}`)
     const peer = this._getPeer(peerIdx)
     peer.connect()
+    this._connectedPeers[peerIdx] = peer
+    this._connectedPeersNumber++
 
     peer.on('timeout', () => {
-      console.log(colors.yellow('Peer timeout: ', peerIdx))
-      this._handlePeerDisconnect(peerIdx)
+      logger.warning(`Peer timeout: ${peerIdx}`)
+      this._handlePeerDisconnect(peerIdx, 'timeout')
     })
 
-    peer.on('peer-error', () => this._handlePeerDisconnect(peerIdx))
-    peer.on('choked', () => this._handlePeerDisconnect(peerIdx))
+    peer.on('peer-error', () => this._handlePeerError(peerIdx))
+    peer.on('choked', () => this._handlePeerDisconnect(peerIdx, 'choked'))
+    peer.on('block-request-timeout', () => this._handlePeerDisconnect(peerIdx, 'block-request-timeout'))
 
     return peer
   }
 
-  _handlePeerDisconnect (peerIdx) {
-    this._finishPeerConnection(peerIdx)
+  _handlePeerDisconnect (peerIdx, reason) {
+    if (this._connectedPeers[peerIdx]) {
+      this._finishPeerConnection(peerIdx, reason)
+      this._setPeerAvailable(peerIdx)
+    }
+    this.refreshPeerConnections()
+  }
+
+  /**
+   * Waits 5 minutes until making the peer available again
+   * @param {Number} peerIdx
+   */
+  _handlePeerError (peerIdx) {
+    if (this._connectedPeers[peerIdx]) {
+      this._finishPeerConnection(peerIdx, 'peer-error')
+      this._setPeerAvailableAfterSeconds(peerIdx, 300)
+    }
     this.refreshPeerConnections()
   }
 
@@ -80,11 +97,19 @@ export class DownloadManager {
     return new Peer(ip, port, peerId, this._torrent)
   }
 
-  _finishPeerConnection (peerIdx) {
-    if (this._connectedPeers[peerIdx]) {
-      delete this._connectedPeers[peerIdx]
-      this._connectedPeersNumber--
-    }
+  _finishPeerConnection (peerIdx, reason) {
+    delete this._connectedPeers[peerIdx]
+    this._connectedPeersNumber--
+  }
+
+  _setPeerAvailable (peerIdx) {
+    this._availablePeersIndexes.push(peerIdx)
+  }
+
+  _setPeerAvailableAfterSeconds (peerIdx, seconds) {
+    setTimeout(() => {
+      this._setPeerAvailable(peerIdx)
+    }, seconds * 1000)
   }
 
   _closeAllPeersConections () {

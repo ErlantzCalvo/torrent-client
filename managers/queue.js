@@ -41,20 +41,20 @@ export class Queue {
     }
   }
 
-  setBlockRequested(blockInfo, timeout) {
+  setBlockRequested (blockInfo, timeout) {
     const block = this._queue.find(block => block.index === blockInfo.index && block.begin === blockInfo.begin)
-    if(block) block.requested = true
+    if (block) block.requested = true
 
-    if(timeout) {
+    if (timeout) {
       setTimeout(() => {
         block.requested = false
       }, timeout)
     }
   }
 
-  setBlockDownloaded(blockInfo) {
+  setBlockDownloaded (blockInfo) {
     const block = this._queue.find(block => block.index === blockInfo.index && block.begin === blockInfo.begin)
-    if(block) block.downloaded = true
+    if (block) block.downloaded = true
   }
 
   pop () {
@@ -64,9 +64,7 @@ export class Queue {
   has (pieceIndex) {
     return this._queue.some(piece => piece.index === pieceIndex)
   }
-
 }
-
 
 class BlockInfo {
   constructor (index, begin, length, requested, downloaded) {
@@ -78,10 +76,10 @@ class BlockInfo {
     this._requestTimeout = null
   }
 
-  setRequested(timeout, callback) {
+  setRequested (timeout, callback) {
     this.requested = true
 
-    if(timeout) {
+    if (timeout) {
       this._requestTimeout = setTimeout(() => {
         this.requested = false
         callback()
@@ -89,8 +87,9 @@ class BlockInfo {
     }
   }
 
-  setDownloaded() {
+  setDownloaded () {
     this.downloaded = true
     clearTimeout(this._requestTimeout)
+    this._requestTimeout = null
   }
 }

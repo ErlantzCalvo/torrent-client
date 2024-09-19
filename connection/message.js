@@ -1,6 +1,5 @@
 import { Peer } from './peer.js' // eslint-disable-line
 import { bytesToDecimal } from '../utils.js'
-import colors from 'colors'
 import { logMessageReceived } from '../logger/logger.js'
 
 const MESSAGE_TYPES = {
@@ -22,7 +21,7 @@ const MESSAGE_TYPES = {
  */
 export function handlePeerMessage (data, peer) {
   const message = parseMessage(data)
-  logMessageReceived(`Message received from peer: ${getMessageTypeById(message.id)} ${message.id}`)
+  logMessageReceived(`Message received from peer: ${getMessageTypeById(message.id)}}`)
 
   switch (message.id) {
     case MESSAGE_TYPES.CHOKE:
@@ -38,12 +37,14 @@ export function handlePeerMessage (data, peer) {
     case MESSAGE_TYPES.HAVE: {
       const availablePiece = haveHandler(message.payload)
       peer.addAvailablePiece(availablePiece)
+      if(!peer.requested) peer.requestNextBlock()
       break
     }
     case MESSAGE_TYPES.BITFIELD: {
-      if(message.size === (message.payload.length + 1)) {
+      if (message.size === (message.payload.length + 1)) {
         const availablePieces = bitfieldHandler(message.payload)
         peer.setAvailablePieces(availablePieces)
+        if(!peer.requested) peer.requestNextBlock()
       } else {
         peer.disconnect('peer-error', 'wrong bitfield size')
       }
@@ -88,8 +89,7 @@ export function buildKeepAliveMessage () {
  * @returns {number[]} Array of pieces' indexes available
  */
 function haveHandler (payload) {
-  console.log('---- HAVE -->', payload)
-
+  return payload.readUInt32BE(0)
 }
 
 /**
@@ -112,6 +112,6 @@ function bitfieldHandler (payload) {
   return pieces
 }
 
-function getMessageTypeById(msgId) {
+function getMessageTypeById (msgId) {
   return Object.keys(MESSAGE_TYPES).find(type => MESSAGE_TYPES[type] === msgId)
 }
