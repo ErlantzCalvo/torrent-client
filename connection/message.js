@@ -21,7 +21,7 @@ const MESSAGE_TYPES = {
  */
 export function handlePeerMessage (data, peer) {
   const message = parseMessage(data)
-  logMessageReceived(`Message received from peer: ${getMessageTypeById(message.id)}}`)
+  logMessageReceived(`Message received from peer: ${getMessageTypeById(message.id)}`)
 
   switch (message.id) {
     case MESSAGE_TYPES.CHOKE:
