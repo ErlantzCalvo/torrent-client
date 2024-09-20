@@ -1,3 +1,5 @@
+import fs from 'node:fs'
+
 export function hexUrlEncoding (hexString) {
   return hexString.replace(/.{2}/g, function (m) {
     const v = parseInt(m, 16)
@@ -21,4 +23,18 @@ export function bytesToDecimal (buffer) {
   }
 
   return result
+}
+
+export function createFolder(path) {
+  if (!fs.existsSync(path)) {
+    fs.mkdirSync(path)
+  }
+}
+/**
+ * 
+ * @param {Buffer} buffer 
+ * @returns boolean
+ */
+export function bufferIsEmpty(buffer) {
+  return !buffer.some(byte => byte !== 0)
 }

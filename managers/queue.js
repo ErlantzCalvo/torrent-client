@@ -52,8 +52,8 @@ export class Queue {
     }
   }
 
-  setBlockDownloaded (blockInfo) {
-    const block = this._queue.find(block => block.index === blockInfo.index && block.begin === blockInfo.begin)
+  setBlockDownloaded (pieceIndex, blockBegin) {
+    const block = this._queue.find(block => pieceIndex === block.index && block.begin === blockBegin)
     if (block) block.downloaded = true
   }
 

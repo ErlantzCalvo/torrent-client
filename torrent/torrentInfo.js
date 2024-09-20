@@ -2,20 +2,23 @@ import fs from 'node:fs'
 import colors from 'colors'
 import { encode, decode } from '../bencoding/index.js'
 import { createHash, randomBytes } from 'node:crypto'
-import { hexUrlEncoding } from '../utils.js'
+import { bufferIsEmpty, hexUrlEncoding } from '../utils.js'
 import { createSocket } from 'node:dgram'
 import { URL } from 'node:url'
 import { Queue } from '../managers/queue.js'
 import { BLOCK_LENGTH } from '../constants.js'
+import {createFolder} from '../utils.js'
 
 export class TorrentInfo {
   constructor (path, verbose) {
     if (path) {
       this.createTorrentFromFile(path)
       this._queue = new Queue(this)
-      this.file = createFile(this.info)
-      this._totalBytes = getTotalBytesLength(this.info)
+      this._totalBytes = calculateTotalBytesLength(this.info)
       this._downloadedBytes = 0
+      this.downloadsFolderPath = 'Downloads'
+      createFolder(this.downloadsFolderPath)
+      this.file = this._getFile()
 
       if (verbose) { this.printInfo() }
     }
@@ -133,7 +136,44 @@ export class TorrentInfo {
     this._printDownloadProgress()
   }
 
-  _printDownloadProgress () {
+  _getFile() {
+    const filePath = this.downloadsFolderPath + '/' + this.info.name
+    if(fs.existsSync(filePath)) {
+      return this._setDownloadedPiecesOfFile(filePath, this.info)
+    } else {
+      return createFile(this.downloadsFolderPath, this.info)
+    }
+  }
+
+  _setDownloadedPiecesOfFile() {
+    const filePath = this.downloadsFolderPath + '/' + this.info.name
+    const PIECE_NUMBER = this.getPiecesNumber()
+    const torrent = this;
+
+    let fd = fs.openSync(filePath, 'r+')
+
+    for (let pieceIndex = 0; pieceIndex < PIECE_NUMBER; pieceIndex++) {
+      const BLOCK_SIZE = torrent.getBlockLength(pieceIndex)
+      const BLOCKS_NUMBER = torrent.getBlocksPerPiece(pieceIndex)
+      let buffer = Buffer.alloc(BLOCK_SIZE)
+      
+      torrent._queue.push(pieceIndex)
+
+      for (let blockIndex = 0; blockIndex < BLOCKS_NUMBER; blockIndex++) {
+        let bytesRead = fs.readSync(fd, buffer, 0, BLOCK_SIZE, null)
+        if (bytesRead === 0) return fd
+
+        if (!bufferIsEmpty(buffer)) {
+          torrent._queue.setBlockDownloaded(pieceIndex, blockIndex * BLOCK_SIZE)
+          torrent.setDownloadedPercentage(BLOCK_SIZE)
+        }
+      }
+
+    }
+    return fd
+  }
+
+  _printDownloadProgress() {
     const percentage = (this._downloadedBytes / this._totalBytes) * 100
     console.log(colors.magenta(`Download progress: ${percentage.toFixed(3)}%`))
   }
@@ -233,25 +273,22 @@ function buildUdpRequest () {
   return buffer
 }
 
-function createFile (torrentInfo) {
-  const dir = 'Downloads'
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir)
-  }
-
+function createFile (downloadFolder, torrentInfo) {
   if (torrentInfo.files) {
     torrentInfo.files.forEach(file => {
       const fileName = file.path?.pop()
       const filePath = file.path?.join('/')
-      fs.mkdirSync(dir + '/' + filePath, { recursive: true })
-      return fs.openSync(dir + '/' + filePath + '/' + fileName, 'w')
+      fs.mkdirSync(downloadFolder + '/' + filePath, { recursive: true })
+      return fs.openSync(downloadFolder + '/' + filePath + '/' + fileName, 'w')
     })
   } else {
-    return fs.openSync(dir + '/' + torrentInfo.name, 'w')
+    return fs.openSync(downloadFolder + '/' + torrentInfo.name, 'w')
   }
 }
 
-function getTotalBytesLength (torrentInfo) {
+
+
+function calculateTotalBytesLength (torrentInfo) {
   if (torrentInfo.files) {
     let size = 0
     torrentInfo.files.forEach(file => {
