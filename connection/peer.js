@@ -5,9 +5,11 @@ import { buildKeepAliveMessage, handlePeerMessage } from './message.js'
 import { TorrentInfo } from '../torrent/torrentInfo.js' // eslint-disable-line
 import { Queue } from '../managers/queue.js' // eslint-disable-line
 import { BLOCK_LENGTH } from '../constants.js'
+import * as logger from '../logger/logger.js'
 
-const SOCKET_CONNECTION_MAX_TIME = 15000 // 15s
+const SOCKET_CONNECTION_MAX_TIME = 35000 // 35s
 const HANDSHAKE_MAX_TIME = 5000 // 5s
+const CHOKE_MAX_TIME = 120000 // 5s
 export class Peer extends EventEmitter {
   /**
    *
@@ -24,20 +26,19 @@ export class Peer extends EventEmitter {
     this.id = id
     this.torrent = torrent
     this.handshakeAchieved = false
-    this.bitfield = null
     this.client = null
     this.connectionTimeout = null
     this.keepAliveInterval = null
     this.piecesQueue = piecesQueue
     this.choked = true
-    this._availablePieces = []
+    this._availablePieces = Array.from({length: torrent.getPiecesNumber()}, () => 0)
     this.requested = null
   }
 
   connect () {
     const peer = this
     this.client = createConnection(this.port, this.ip)
-    this.client.setTimeout(SOCKET_CONNECTION_MAX_TIME)
+    this._setSocketConnectionTimeout(SOCKET_CONNECTION_MAX_TIME)
 
     this.client.on('error', (err) => {
       this.disconnect('peer-error', err)
@@ -67,10 +68,8 @@ export class Peer extends EventEmitter {
     buff.write(this.torrent.infoHash, 28, 20, 'hex')
     if (this.id) buff.write(this.id, 48, 20, 'ascii')
     this.client.write(buff, (err) => {
-      this.connectionTimeout = setTimeout(() => {
-        this.disconnect('timeout')
-      }, HANDSHAKE_MAX_TIME)
-      console.log('Connection request sent to peer ', this.id)
+      this._setSocketConnectionTimeout(HANDSHAKE_MAX_TIME)
+      logger.info(`Connection request sent to peer ${this.id}`)
       if (err) {
         console.error('Error sending handshake: ', err)
       }
@@ -83,7 +82,7 @@ export class Peer extends EventEmitter {
 
   choke () {
     this.choked = true
-    this.disconnect('choked')
+    this._setSocketConnectionTimeout(CHOKE_MAX_TIME)
   }
 
   unchoke () {
@@ -97,35 +96,35 @@ export class Peer extends EventEmitter {
   }
 
   addAvailablePiece (piece) {
-    this._availablePieces.push(piece)
+    this._availablePieces[piece] = 1
     this.torrent.addPiecesToQueue([piece])
   }
 
   requestNextBlock () {
     for (let piece = 0; piece < this._availablePieces.length; piece++) {
-
       const pieceBlock = this.torrent.getAvailableBlockFromQueue(piece)
-      
+
       // If piece is not in queue or is already processed go to next piece
       const pieceBlockIsAvailable = pieceBlock && !pieceBlock.requested && !pieceBlock.downloaded
       if (!pieceBlockIsAvailable) continue
 
       this._requestBlock(pieceBlock)
-      pieceBlock.setRequested(20_000, () => this.disconnect('block-request-timeout'));
+      pieceBlock.setRequested(20_000, () => {
+        this.disconnect('block-request-timeout')
+      })
       this.requested = pieceBlock
       break
     }
-    console.log('REQUESTED PIECE ', this.requested)
+    logger.info(`REQUESTED PIECE Piece: ${this.requested.index} - Begin ${this.requested.begin}`)
   }
 
   _handlePiece (payload) {
-    // if is the last block of the current piece, do not continue asking for the piece
     const blockIndex = this.requested.begin / BLOCK_LENGTH
     const offset = this.requested.index * this.torrent.getPieceLength(this.requested.index) + this.requested.begin
-    console.log(`Received block ${blockIndex + 1}/${this.torrent.getBlocksPerPiece(this.requested.index)} of piece ${this.requested.index} (offset: ${offset})`)
+    logger.info(`Received block ${blockIndex + 1}/${this.torrent.getBlocksPerPiece(this.requested.index)} of piece ${this.requested.index} (offset: ${offset})`)
 
-    fs.write(this.torrent.file, payload, 0, payload.length, offset, (err)=>{
-      if(err) console.error(err)
+    fs.write(this.torrent.file, payload, 0, payload.length, offset, (err) => {
+      if (err) console.error(err)
     })
     this.requested.setDownloaded()
     this.torrent.setDownloadedPercentage(this.requested.length)
@@ -147,10 +146,19 @@ export class Peer extends EventEmitter {
     this.client.write(buf)
   }
 
+  _setSocketConnectionTimeout (timeout) {
+    clearDisconnectionTimeout(this)
+    this.connectionTimeout = setTimeout(() => {
+      this.disconnect('timeout')
+    }, timeout)
+  }
+
   disconnect (reason, data) {
-    clearInterval(this.keepAliveInterval)
-    if (reason) this.emit(reason, data)
     this.client.end()
+    this.client.destroy()
+    clearKeepAliveInterval(this)
+    clearDisconnectionTimeout(this)
+    if (reason) this.emit(reason, data)
   }
 }
 
@@ -160,8 +168,7 @@ export class Peer extends EventEmitter {
  * @param {Buffer} data
  */
 function handleMessage (peer, data) {
-  clearTimeout(peer.connectionTimeout)
-  peer.connectionTimeout = null
+  peer._setSocketConnectionTimeout(SOCKET_CONNECTION_MAX_TIME)
 
   if (!peer.handshakeAchieved) {
     validateHandshake(peer, data)
@@ -187,7 +194,7 @@ function validateHandshake (peer, data) {
     peer.disconnect('peer-error', 'wrong-handshake')
   } else {
     peer.handshakeAchieved = true
-    console.log('Connected to peer ', peer.id)
+    logger.info(`Connected to peer ${peer.id}`)
   }
 }
 
@@ -205,4 +212,14 @@ function isTheSameInfoHash (bufA, infoHash) {
     }
   }
   return true
+}
+
+function clearKeepAliveInterval (peer) {
+  clearInterval(peer.keepAliveInterval)
+  peer.keepAliveInterval = null
+}
+
+function clearDisconnectionTimeout (peer) {
+  clearTimeout(peer.connectionTimeout)
+  peer.connectionTimeout = null
 }
