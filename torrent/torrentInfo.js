@@ -34,10 +34,10 @@ export class TorrentInfo {
 
   async requestTorrentPeers (port) {
     let announceUrls = [this.announce]
-    if(this['announce-list']) {
+    if (this['announce-list']) {
       announceUrls = this['announce-list']
     }
-    for(const announceUrl of announceUrls) {
+    for (const announceUrl of announceUrls) {
       let result
       try {
         console.log('requesting ' + announceUrl)
@@ -118,7 +118,7 @@ export class TorrentInfo {
    * @param {number[]} pieces
    */
   addPiecesToQueue (pieces) {
-    for(let piece = 0; piece < pieces.length; piece++) {
+    for (let piece = 0; piece < pieces.length; piece++) {
       if (!this._queue.has(piece) && pieces[piece] === 1) this._queue.push(piece)
     }
   }
@@ -128,12 +128,12 @@ export class TorrentInfo {
     return blockIndex === (blocksNumber - 1)
   }
 
-  setDownloadedPercentage(bytes) {
-    this._downloadedBytes += bytes 
+  setDownloadedPercentage (bytes) {
+    this._downloadedBytes += bytes
     this._printDownloadProgress()
   }
 
-  _printDownloadProgress() {
+  _printDownloadProgress () {
     const percentage = (this._downloadedBytes / this._totalBytes) * 100
     console.log(colors.magenta(`Download progress: ${percentage.toFixed(3)}%`))
   }
@@ -166,7 +166,7 @@ function isUdpRequest (urlStr) {
   return url.protocol === 'udp:'
 }
 
-function makeAnnounceRequest(url, port, infoHash) {
+function makeAnnounceRequest (url, port, infoHash) {
   if (isHttpRequest(url)) {
     return fetchHttpAnnounce(url, port, infoHash)
   } else if (isUdpRequest(url)) {
@@ -175,7 +175,6 @@ function makeAnnounceRequest(url, port, infoHash) {
     throw new Error('Unknwon announcer protocol')
   }
 }
-
 
 async function fetchHttpAnnounce (domain, port, infoHash) {
   const connectionPort = port || 6881
@@ -191,31 +190,29 @@ async function fetchHttpAnnounce (domain, port, infoHash) {
 
 async function fetchUdpAnnounce (domain, port, infoHash) {
   return new Promise((resolve, reject) => {
-    
     const url = new URL(domain)
     const message = buildUdpRequest()
     const client = createSocket('udp4')
-    
+
     client.on('error', function (err) {
       console.error(err)
       this.close()
       reject(err)
     })
-    
+
     client.send(message, 0, message.length, url.port, url.host, function (err, res) {
       if (err) reject('UDP connection error')
       else console.log('UDP connection succed', res)
     })
-    
+
     client.on('message', function (data) {
       const response = data.readUInt32BE(0)
       if (response === 0) { // connect
-  
+
       } else if (response === 1) { // announce
-  
+
       }
       resolve(data)
-  
     })
   })
 }
@@ -236,26 +233,25 @@ function buildUdpRequest () {
   return buffer
 }
 
-function createFile(torrentInfo) {
+function createFile (torrentInfo) {
   const dir = 'Downloads'
-  if (!fs.existsSync(dir)){
-    fs.mkdirSync(dir);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir)
   }
 
   if (torrentInfo.files) {
     torrentInfo.files.forEach(file => {
       const fileName = file.path?.pop()
       const filePath = file.path?.join('/')
-      fs.mkdirSync(dir + "/" +filePath, {recursive: true})
-      return fs.openSync(dir + "/" +filePath + '/' + fileName, 'w')
+      fs.mkdirSync(dir + '/' + filePath, { recursive: true })
+      return fs.openSync(dir + '/' + filePath + '/' + fileName, 'w')
     })
   } else {
     return fs.openSync(dir + '/' + torrentInfo.name, 'w')
   }
-
 }
 
-function getTotalBytesLength(torrentInfo) {
+function getTotalBytesLength (torrentInfo) {
   if (torrentInfo.files) {
     let size = 0
     torrentInfo.files.forEach(file => {
