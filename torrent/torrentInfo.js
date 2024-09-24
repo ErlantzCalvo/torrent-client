@@ -258,7 +258,7 @@ async function fetchUdpAnnounce (domain, port, infoHash) {
 }
 
 function buildUdpRequest () {
-  const buffer = Buffer.alloc(16)
+  const buffer = Buffer.allocUnsafe(16)
 
   // connectionId
   buffer.writeUInt32BE(0x417, 0)
