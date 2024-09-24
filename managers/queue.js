@@ -52,6 +52,17 @@ export class Queue {
     }
   }
 
+  setBlockUnrequested (pieceIndex, blockBegin, timeout) {
+    const block = this._queue.find(block => pieceIndex === block.index && block.begin === blockBegin)
+    if (block) block.requested = false
+
+    if (timeout) {
+      setTimeout(() => {
+        block.requested = false
+      }, timeout)
+    }
+  }
+
   setBlockDownloaded (pieceIndex, blockBegin) {
     const block = this._queue.find(block => pieceIndex === block.index && block.begin === blockBegin)
     if (block) block.downloaded = true
@@ -89,6 +100,10 @@ class BlockInfo {
 
   setDownloaded () {
     this.downloaded = true
+    this.removeRequestedTimeout()
+  }
+
+  removeRequestedTimeout () {
     clearTimeout(this._requestTimeout)
     this._requestTimeout = null
   }
