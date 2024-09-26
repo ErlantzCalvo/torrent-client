@@ -2,12 +2,11 @@ import fs from 'node:fs'
 import colors from 'colors'
 import { encode, decode } from '../bencoding/index.js'
 import { createHash, randomBytes } from 'node:crypto'
-import { bufferIsEmpty, hexUrlEncoding } from '../utils.js'
+import { hexUrlEncoding, createFolder } from '../utils.js'
 import { createSocket } from 'node:dgram'
 import { URL } from 'node:url'
 import { Queue } from '../managers/queue.js'
 import { BLOCK_LENGTH } from '../constants.js'
-import {createFolder} from '../utils.js'
 
 export class TorrentInfo {
   constructor (path, verbose) {
@@ -136,44 +135,64 @@ export class TorrentInfo {
     this._printDownloadProgress()
   }
 
-  _getFile() {
+  /**
+   *
+   * @param {Buffer} piece the whole piece buffer to be checked
+   * @param {number} pieceIndex The piece number
+   * @returns true if the piece is correct, else false
+   */
+  isValidPiece (piece, pieceIndex) {
+    const pieceHash = this.getPieceHash(pieceIndex)
+    const filePieceHash = createHash('sha1').update(piece).digest('hex')
+
+    return pieceHash === filePieceHash
+  }
+
+  getPieceHash (pieceIndex) {
+    const begin = 20 * pieceIndex
+    return this.info.pieces.subarray(begin, begin + 20).toString('hex')
+  }
+
+  _getFile () {
     const filePath = this.downloadsFolderPath + '/' + this.info.name
-    if(fs.existsSync(filePath)) {
+    if (fs.existsSync(filePath)) {
       return this._setDownloadedPiecesOfFile(filePath, this.info)
     } else {
       return createFile(this.downloadsFolderPath, this.info)
     }
   }
 
-  _setDownloadedPiecesOfFile() {
+  _setDownloadedPiecesOfFile () {
     const filePath = this.downloadsFolderPath + '/' + this.info.name
     const PIECE_NUMBER = this.getPiecesNumber()
-    const torrent = this;
+    const torrent = this
 
-    let fd = fs.openSync(filePath, 'r+')
+    const fd = fs.openSync(filePath, 'r+')
 
     for (let pieceIndex = 0; pieceIndex < PIECE_NUMBER; pieceIndex++) {
-      const BLOCK_SIZE = torrent.getBlockLength(pieceIndex)
-      const BLOCKS_NUMBER = torrent.getBlocksPerPiece(pieceIndex)
-      let buffer = Buffer.alloc(BLOCK_SIZE)
-      
-      torrent._queue.push(pieceIndex)
+      this._queue.push(pieceIndex)
 
-      for (let blockIndex = 0; blockIndex < BLOCKS_NUMBER; blockIndex++) {
-        let bytesRead = fs.readSync(fd, buffer, 0, BLOCK_SIZE, null)
-        if (bytesRead === 0) return fd
+      const PIECE_SIZE = this.info['piece length']
+      const buffer = Buffer.alloc(PIECE_SIZE)
 
-        if (!bufferIsEmpty(buffer)) {
-          torrent._queue.setBlockDownloaded(pieceIndex, blockIndex * BLOCK_SIZE)
+      const bytesRead = fs.readSync(fd, buffer, 0, PIECE_SIZE, null)
+      if (bytesRead === 0) return fd
+
+      if (this.isValidPiece(buffer, pieceIndex)) {
+        const blocksNumber = this.getBlocksPerPiece(pieceIndex)
+
+        for (let blockIndex = 0; blockIndex < blocksNumber; blockIndex++) {
+          const BLOCK_SIZE = this.getBlockLength(pieceIndex, blockIndex)
+          this._queue.setBlockDownloaded(pieceIndex, blockIndex * BLOCK_SIZE)
           torrent.setDownloadedPercentage(BLOCK_SIZE)
         }
       }
-
     }
+
     return fd
   }
 
-  _printDownloadProgress() {
+  _printDownloadProgress () {
     const percentage = (this._downloadedBytes / this._totalBytes) * 100
     console.log(colors.magenta(`Download progress: ${percentage.toFixed(3)}%`))
   }
@@ -241,7 +260,7 @@ async function fetchUdpAnnounce (domain, port, infoHash) {
     })
 
     client.send(message, 0, message.length, url.port, url.host, function (err, res) {
-      if (err) reject('UDP connection error')
+      if (err) reject(new Error('UDP connection error'))
       else console.log('UDP connection succed', res)
     })
 
@@ -285,8 +304,6 @@ function createFile (downloadFolder, torrentInfo) {
     return fs.openSync(downloadFolder + '/' + torrentInfo.name, 'w')
   }
 }
-
-
 
 function calculateTotalBytesLength (torrentInfo) {
   if (torrentInfo.files) {
