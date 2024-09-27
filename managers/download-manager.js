@@ -61,12 +61,13 @@ export class DownloadManager {
 
     peer.on('timeout', () => {
       logger.warning(`Peer timeout: ${peerIdx}`)
-      this._handlePeerDisconnect(peerIdx, 'timeout')
+      this._handlePeerDisconnectWithTimeout(peerIdx, 'timeout', 10000)
     })
 
     peer.on('peer-error', () => this._handlePeerError(peerIdx))
     peer.on('choked', () => this._handlePeerDisconnect(peerIdx, 'choked'))
     peer.on('block-request-timeout', () => this._handlePeerDisconnect(peerIdx, 'block-request-timeout'))
+    peer.on('no-new-pieces', () => this._handlePeerDisconnect(peerIdx, 'no-new-pieces'))
 
     return peer
   }
@@ -75,6 +76,14 @@ export class DownloadManager {
     if (this._connectedPeers[peerIdx]) {
       this._finishPeerConnection(peerIdx, reason)
       this._setPeerAvailable(peerIdx)
+    }
+    this.refreshPeerConnections()
+  }
+
+  _handlePeerDisconnectWithTimeout (peerIdx, reason, timeout) {
+    if (this._connectedPeers[peerIdx]) {
+      this._finishPeerConnection(peerIdx, reason)
+      this._setPeerAvailableAfterSeconds(peerIdx, timeout / 1000)
     }
     this.refreshPeerConnections()
   }
