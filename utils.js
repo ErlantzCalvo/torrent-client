@@ -25,16 +25,8 @@ export function bytesToDecimal (buffer) {
   return result
 }
 
-export function createFolder(path) {
+export function createFolder (path) {
   if (!fs.existsSync(path)) {
     fs.mkdirSync(path)
   }
-}
-/**
- * 
- * @param {Buffer} buffer 
- * @returns boolean
- */
-export function bufferIsEmpty(buffer) {
-  return !buffer.some(byte => byte !== 0)
 }
