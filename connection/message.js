@@ -37,14 +37,14 @@ export function handlePeerMessage (data, peer) {
     case MESSAGE_TYPES.HAVE: {
       const availablePiece = haveHandler(message.payload)
       peer.addAvailablePiece(availablePiece)
-      if(!peer.requested) peer.requestNextBlock()
+      if (!peer.requested) peer.requestNextBlock()
       break
     }
     case MESSAGE_TYPES.BITFIELD: {
       if (message.size === (message.payload.length + 1)) {
         const availablePieces = bitfieldHandler(message.payload)
         peer.setAvailablePieces(availablePieces)
-        if(!peer.requested) peer.requestNextBlock()
+        if (!peer.requested) peer.requestNextBlock()
       } else {
         peer.disconnect('peer-error', 'wrong bitfield size')
       }
@@ -53,7 +53,8 @@ export function handlePeerMessage (data, peer) {
     case MESSAGE_TYPES.REQUEST:
       break
     case MESSAGE_TYPES.PIECE:
-      peer._handlePiece(message.payload)
+      const payload = processPiecePayload(message.payload)
+      peer._handlePiece(payload)
       break
     case MESSAGE_TYPES.CANCEL:
       break
@@ -77,6 +78,17 @@ function parseMessage (data) {
   if (data.length > 5) message.payload = data.subarray(5)
 
   return message
+}
+
+/**
+ *
+ * @param {Buffer} payload
+ */
+function processPiecePayload (payload) {
+  const index = payload.readInt32BE(0)
+  const begin = payload.readInt32BE(4)
+  const block = payload.subarray(8)
+  return { block, index, begin }
 }
 
 export function buildKeepAliveMessage () {

@@ -3,13 +3,14 @@ import fs from 'node:fs'
 import { createConnection } from 'node:net'
 import { buildKeepAliveMessage, handlePeerMessage } from './message.js'
 import { TorrentInfo } from '../torrent/torrentInfo.js' // eslint-disable-line
-import { Queue } from '../managers/queue.js' // eslint-disable-line
+import { Queue } from '../structures/queue.js' // eslint-disable-line
 import { BLOCK_LENGTH } from '../constants.js'
 import * as logger from '../logger/logger.js'
 
-const SOCKET_CONNECTION_MAX_TIME = 35000 // 35s
-const HANDSHAKE_MAX_TIME = 5000 // 5s
-const CHOKE_MAX_TIME = 120000 // 5s
+const SOCKET_CONNECTION_MAX_TIME = 10000 // 10s
+const MAX_TIME_BETWEEN_MESSAGES = 60000 // 15s
+const HANDSHAKE_MAX_TIME = 10000 // 10s
+const CHOKE_MAX_TIME = 120000 // 2 min
 export class Peer extends EventEmitter {
   /**
    *
@@ -31,7 +32,7 @@ export class Peer extends EventEmitter {
     this.keepAliveInterval = null
     this.piecesQueue = piecesQueue
     this.choked = true
-    this._availablePieces = Array.from({length: torrent.getPiecesNumber()}, () => 0)
+    this._availablePieces = Array.from({ length: torrent.getPiecesNumber() }, () => 0)
     this.requested = null
   }
 
@@ -113,21 +114,34 @@ export class Peer extends EventEmitter {
         this.disconnect('block-request-timeout')
       })
       this.requested = pieceBlock
+      logger.info(`REQUESTED PIECE Piece: ${this.requested.index} - Begin ${this.requested.begin}`)
       break
     }
-    logger.info(`REQUESTED PIECE Piece: ${this.requested.index} - Begin ${this.requested.begin}`)
+
+    if (!this.requested) this.disconnect('no-new-pieces')
   }
 
   _handlePiece (payload) {
-    const blockIndex = this.requested.begin / BLOCK_LENGTH
-    const offset = this.requested.index * this.torrent.getPieceLength(this.requested.index) + this.requested.begin
-    logger.info(`Received block ${blockIndex + 1}/${this.torrent.getBlocksPerPiece(this.requested.index)} of piece ${this.requested.index} (offset: ${offset})`)
+    const blockIndex = payload.begin / BLOCK_LENGTH
+    const offset = payload.index * this.torrent.getPieceLength(payload.index) + payload.begin
+    logger.info(`Received block ${blockIndex + 1}/${this.torrent.getBlocksPerPiece(payload.index)} of piece ${payload.index} (bytes: ${payload.block.length})`)
 
-    fs.write(this.torrent.file, payload, 0, payload.length, offset, (err) => {
+    fs.write(this.torrent.file, payload.block, 0, payload.block.length, offset, (err) => {
       if (err) console.error(err)
     })
-    this.requested.setDownloaded()
-    this.torrent.setDownloadedPercentage(this.requested.length)
+
+    const blockLength = this.torrent._queue.getBlockLength(payload.index, payload.begin)
+    if (!blockLength) return
+
+    if (payload.block.length >= blockLength) {
+      this.torrent._queue.setBlockDownloaded(payload.index, payload.begin)
+    } else {
+      const newBegin = payload.begin + payload.block.length
+      const newlength = blockLength - payload.block.length
+      this.torrent._queue.setBlockUnrequested(payload.index, payload.begin)
+      this.torrent._queue.updateBlockInfo(payload.index, payload.begin, newlength, newBegin)
+    }
+    this.torrent.setDownloadedPercentage(payload.block.length)
     this.requested = null
 
     this.requestNextBlock()
@@ -156,6 +170,10 @@ export class Peer extends EventEmitter {
   disconnect (reason, data) {
     this.client.end()
     this.client.destroy()
+    if (this.requested) {
+      this.requested.removeRequestedTimeout()
+      this.requested.requested = false
+    }
     clearKeepAliveInterval(this)
     clearDisconnectionTimeout(this)
     if (reason) this.emit(reason, data)
@@ -168,7 +186,7 @@ export class Peer extends EventEmitter {
  * @param {Buffer} data
  */
 function handleMessage (peer, data) {
-  peer._setSocketConnectionTimeout(SOCKET_CONNECTION_MAX_TIME)
+  peer._setSocketConnectionTimeout(MAX_TIME_BETWEEN_MESSAGES)
 
   if (!peer.handshakeAchieved) {
     validateHandshake(peer, data)
