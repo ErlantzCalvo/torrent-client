@@ -5,7 +5,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import { hexUrlEncoding, createFolder } from '../utils.js'
 import { createSocket } from 'node:dgram'
 import { URL } from 'node:url'
-import { Queue } from '../managers/queue.js'
+import { Queue } from '../structures/queue.js'
 import { BLOCK_LENGTH } from '../constants.js'
 
 export class TorrentInfo {
