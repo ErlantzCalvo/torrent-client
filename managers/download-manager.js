@@ -1,6 +1,7 @@
 import { Peer } from '../connection/peer.js'
 import { TorrentInfo } from '../torrent/torrentInfo.js' // eslint-disable-line
 import * as logger from '../logger/logger.js'
+import { PriorityQueue } from '../structures/priorityQueue.js'
 
 export class DownloadManager {
   /**
@@ -15,7 +16,7 @@ export class DownloadManager {
     this._connectedPeers = {}
     this._connectedPeersNumber = 0
     this._refreshPeersInterval = null
-    this._availablePeersIndexes = []
+    this._availablePeersIndexes = new PriorityQueue()
   }
 
   async start () {
@@ -35,21 +36,28 @@ export class DownloadManager {
     this._connectedPeersNumber = 0
 
     await this.fetchPeersList()
-    this._availablePeersIndexes = Array.from(this.peersListInfo.peers, (_, idx) => idx)
+    this.resetAvailablePeers()
     this.refreshPeerConnections()
   }
 
   refreshPeerConnections () {
-    const remainingConnections = Math.min(this.maxPeersNumber - this._connectedPeersNumber, this._availablePeersIndexes.length)
+    const remainingConnections = Math.min(this.maxPeersNumber - this._connectedPeersNumber, this._availablePeersIndexes.size())
     for (let i = 0; i < remainingConnections; i++) {
-      const peerIdx = this._availablePeersIndexes.shift()
-      this._connectPeer(peerIdx)
+      const peerIdx = this._availablePeersIndexes.dequeue()
+      this._connectPeer(peerIdx.node)
     }
   }
 
   stop () {
     clearInterval(this._refreshPeersInterval)
     this._closeAllPeersConections()
+  }
+
+  resetAvailablePeers () {
+    this._availablePeersIndexes = new PriorityQueue()
+    for (const peer in this.peersListInfo.peers) {
+      this._availablePeersIndexes.enqueue(Number(peer), 0)
+    }
   }
 
   _connectPeer (peerIdx) {
@@ -74,16 +82,18 @@ export class DownloadManager {
 
   _handlePeerDisconnect (peerIdx, reason) {
     if (this._connectedPeers[peerIdx]) {
+      const peerPriority = this._connectedPeers[peerIdx].piecesRequestsSent
       this._finishPeerConnection(peerIdx, reason)
-      this._setPeerAvailable(peerIdx)
+      this._setPeerAvailable(peerIdx, peerPriority)
     }
     this.refreshPeerConnections()
   }
 
   _handlePeerDisconnectWithTimeout (peerIdx, reason, timeout) {
     if (this._connectedPeers[peerIdx]) {
+      const peerPriority = this._connectedPeers[peerIdx].piecesRequestsSent
       this._finishPeerConnection(peerIdx, reason)
-      this._setPeerAvailableAfterSeconds(peerIdx, timeout / 1000)
+      this._setPeerAvailableAfterSeconds(peerIdx, peerPriority, timeout / 1000)
     }
     this.refreshPeerConnections()
   }
@@ -94,8 +104,9 @@ export class DownloadManager {
    */
   _handlePeerError (peerIdx) {
     if (this._connectedPeers[peerIdx]) {
+      const peerPriority = this._connectedPeers[peerIdx].piecesRequestsSent
       this._finishPeerConnection(peerIdx, 'peer-error')
-      this._setPeerAvailableAfterSeconds(peerIdx, 300)
+      this._setPeerAvailableAfterSeconds(peerIdx, peerPriority, 300)
     }
     this.refreshPeerConnections()
   }
@@ -111,13 +122,13 @@ export class DownloadManager {
     this._connectedPeersNumber--
   }
 
-  _setPeerAvailable (peerIdx) {
-    this._availablePeersIndexes.push(peerIdx)
+  _setPeerAvailable (peerIdx, priority) {
+    this._availablePeersIndexes.enqueue(peerIdx, priority)
   }
 
-  _setPeerAvailableAfterSeconds (peerIdx, seconds) {
+  _setPeerAvailableAfterSeconds (peerIdx, priority, seconds) {
     setTimeout(() => {
-      this._setPeerAvailable(peerIdx)
+      this._setPeerAvailable(peerIdx, priority)
     }, seconds * 1000)
   }
 

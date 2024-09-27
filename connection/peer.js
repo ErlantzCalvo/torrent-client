@@ -34,6 +34,7 @@ export class Peer extends EventEmitter {
     this.choked = true
     this._availablePieces = Array.from({ length: torrent.getPiecesNumber() }, () => 0)
     this.requested = null
+    this.piecesRequestsSent = 0
   }
 
   connect () {
@@ -122,16 +123,18 @@ export class Peer extends EventEmitter {
   }
 
   _handlePiece (payload) {
+    const blockLength = this.torrent._queue.getBlockLength(payload.index, payload.begin)
+    if (!blockLength) return
     const blockIndex = payload.begin / BLOCK_LENGTH
+
+    this.piecesRequestsSent++
     const offset = payload.index * this.torrent.getPieceLength(payload.index) + payload.begin
+
     logger.info(`Received block ${blockIndex + 1}/${this.torrent.getBlocksPerPiece(payload.index)} of piece ${payload.index} (bytes: ${payload.block.length})`)
 
     fs.write(this.torrent.file, payload.block, 0, payload.block.length, offset, (err) => {
       if (err) console.error(err)
     })
-
-    const blockLength = this.torrent._queue.getBlockLength(payload.index, payload.begin)
-    if (!blockLength) return
 
     if (payload.block.length >= blockLength) {
       this.torrent._queue.setBlockDownloaded(payload.index, payload.begin)
