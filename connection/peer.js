@@ -34,7 +34,7 @@ export class Peer extends EventEmitter {
     this.choked = true
     this._availablePieces = Array.from({ length: torrent.getPiecesNumber() }, () => 0)
     this.requested = null
-    this.piecesRequestsSent = 0
+    this.peerPerformance = 1
   }
 
   connect () {
@@ -112,7 +112,7 @@ export class Peer extends EventEmitter {
 
       this._requestBlock(pieceBlock)
       pieceBlock.setRequested(20_000, () => {
-        this.disconnect('block-request-timeout')
+        pieceBlock.requested = false
       })
       this.requested = pieceBlock
       logger.info(`REQUESTED PIECE Piece: ${this.requested.index} - Begin ${this.requested.begin}`)
@@ -127,7 +127,7 @@ export class Peer extends EventEmitter {
     if (!blockLength) return
     const blockIndex = payload.begin / BLOCK_LENGTH
 
-    this.piecesRequestsSent++
+    this.peerPerformance += Math.sqrt(payload.block.length)
     const offset = payload.index * this.torrent.getPieceLength(payload.index) + payload.begin
 
     logger.info(`Received block ${blockIndex + 1}/${this.torrent.getBlocksPerPiece(payload.index)} of piece ${payload.index} (bytes: ${payload.block.length})`)

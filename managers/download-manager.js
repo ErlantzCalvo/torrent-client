@@ -69,20 +69,21 @@ export class DownloadManager {
 
     peer.on('timeout', () => {
       logger.warning(`Peer timeout: ${peerIdx}`)
-      this._handlePeerDisconnectWithTimeout(peerIdx, 'timeout', 10000)
+      const timeout = 10000 / this._connectedPeers[peerIdx]?.peerPerformance || 1
+      this._handlePeerDisconnectWithTimeout(peerIdx, 'timeout', timeout)
     })
 
     peer.on('peer-error', () => this._handlePeerError(peerIdx))
     peer.on('choked', () => this._handlePeerDisconnect(peerIdx, 'choked'))
     peer.on('block-request-timeout', () => this._handlePeerDisconnect(peerIdx, 'block-request-timeout'))
-    peer.on('no-new-pieces', () => this._handlePeerDisconnect(peerIdx, 'no-new-pieces'))
+    peer.on('no-new-pieces', () => this._handlePeerDisconnectWithTimeout(peerIdx, 'no-new-pieces', 3600000 ))
 
     return peer
   }
 
   _handlePeerDisconnect (peerIdx, reason) {
     if (this._connectedPeers[peerIdx]) {
-      const peerPriority = this._connectedPeers[peerIdx].piecesRequestsSent
+      const peerPriority = this._connectedPeers[peerIdx]?.peerPerformance
       this._finishPeerConnection(peerIdx, reason)
       this._setPeerAvailable(peerIdx, peerPriority)
     }
@@ -91,7 +92,7 @@ export class DownloadManager {
 
   _handlePeerDisconnectWithTimeout (peerIdx, reason, timeout) {
     if (this._connectedPeers[peerIdx]) {
-      const peerPriority = this._connectedPeers[peerIdx].piecesRequestsSent
+      const peerPriority = this._connectedPeers[peerIdx]?.peerPerformance
       this._finishPeerConnection(peerIdx, reason)
       this._setPeerAvailableAfterSeconds(peerIdx, peerPriority, timeout / 1000)
     }
@@ -104,7 +105,7 @@ export class DownloadManager {
    */
   _handlePeerError (peerIdx) {
     if (this._connectedPeers[peerIdx]) {
-      const peerPriority = this._connectedPeers[peerIdx].piecesRequestsSent
+      const peerPriority = this._connectedPeers[peerIdx]?.peerPerformance
       this._finishPeerConnection(peerIdx, 'peer-error')
       this._setPeerAvailableAfterSeconds(peerIdx, peerPriority, 300)
     }

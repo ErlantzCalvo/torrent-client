@@ -53,6 +53,7 @@ export function handlePeerMessage (data, peer) {
     case MESSAGE_TYPES.REQUEST:
       break
     case MESSAGE_TYPES.PIECE:
+      if(message.payload.length < 8) return
       const payload = processPiecePayload(message.payload)
       peer._handlePiece(payload)
       break
