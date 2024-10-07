@@ -1,12 +1,12 @@
 import fs from 'node:fs'
 import colors from 'colors'
 import { encode, decode } from '../bencoding/index.js'
-import { createHash, randomBytes } from 'node:crypto'
-import { hexUrlEncoding, createFolder } from '../utils.js'
-import { createSocket } from 'node:dgram'
-import { URL } from 'node:url'
+import { createHash } from 'node:crypto'
+import { createFolder } from '../utils.js'
+import { requestPeers } from '../connection/announceRequester.js'
 import { Queue } from '../structures/queue.js'
 import { BLOCK_LENGTH } from '../constants.js'
+import * as logger from '../logger/logger.js'
 
 export class TorrentInfo {
   constructor (path, verbose) {
@@ -35,25 +35,29 @@ export class TorrentInfo {
   }
 
   async requestTorrentPeers (port) {
-    let announceUrls = [this.announce]
+    let peersInfo = null
+    let announceUrls = [this.announce.toString('utf8')]
     if (this['announce-list']) {
       announceUrls = this['announce-list']
     }
+
+    announceUrls = announceUrls.map(url => {
+      if(Array.isArray(url)) return url[0]
+      return url
+    })
+
     for (const announceUrl of announceUrls) {
-      let result
       try {
-        console.log('requesting ' + announceUrl)
-        result = await makeAnnounceRequest(announceUrl, port, this.infoHash)
-        return result
-      } catch (error) {
-        // console.error('no success:', error)
-      }
+        let newPeersInfo = await requestPeers(port, announceUrl, this)
+        if(!peersInfo) peersInfo = newPeersInfo
+        else if(newPeersInfo.peers) peersInfo.peers = peersInfo.peers.concat(newPeersInfo.peers)
+
+        logger.info(`Retrieved ${peersInfo.peers.length} peers from announcers`)
+      } catch (error) {}
     }
 
-    return {
-      interval: 900000,
-      peers: []
-    }
+    if(peersInfo) return peersInfo
+    process.exit(1)   
   }
 
   getPiecesNumber () {
@@ -215,82 +219,6 @@ export class TorrentInfo {
   }
 }
 
-function isHttpRequest (urlStr) {
-  const url = new URL(urlStr)
-  return url.protocol === 'http:' || url.protocol === 'https:'
-}
-
-function isUdpRequest (urlStr) {
-  const url = new URL(urlStr)
-  return url.protocol === 'udp:'
-}
-
-function makeAnnounceRequest (url, port, infoHash) {
-  if (isHttpRequest(url)) {
-    return fetchHttpAnnounce(url, port, infoHash)
-  } else if (isUdpRequest(url)) {
-    return fetchUdpAnnounce(url, port, infoHash)
-  } else {
-    throw new Error('Unknwon announcer protocol')
-  }
-}
-
-async function fetchHttpAnnounce (domain, port, infoHash) {
-  const connectionPort = port || 6881
-  const infoHashEncoded = hexUrlEncoding(infoHash)
-  const url = `${domain}?info_hash=${infoHashEncoded}&peer_id=-TR2940-k8hj0erlantz&port=${connectionPort}`
-  return fetch(url)
-    .then(res => res.text())
-    .then(text => {
-      const buffer = Buffer.from(text, 'ascii')
-      return decode(buffer)
-    })
-}
-
-async function fetchUdpAnnounce (domain, port, infoHash) {
-  return new Promise((resolve, reject) => {
-    const url = new URL(domain)
-    const message = buildUdpRequest()
-    const client = createSocket('udp4')
-
-    client.on('error', function (err) {
-      console.error(err)
-      this.close()
-      reject(err)
-    })
-
-    client.send(message, 0, message.length, url.port, url.host, function (err, res) {
-      if (err) reject(new Error('UDP connection error'))
-      else console.log('UDP connection succed', res)
-    })
-
-    client.on('message', function (data) {
-      const response = data.readUInt32BE(0)
-      if (response === 0) { // connect
-
-      } else if (response === 1) { // announce
-
-      }
-      resolve(data)
-    })
-  })
-}
-
-function buildUdpRequest () {
-  const buffer = Buffer.allocUnsafe(16)
-
-  // connectionId
-  buffer.writeUInt32BE(0x417, 0)
-  buffer.writeUInt32BE(0x27101980, 4)
-
-  // action: 0 (connect)
-  buffer.writeInt32BE(0, 8)
-
-  // transaction id (random)
-  randomBytes(4).copy(buffer, 12)
-  console.log(buffer)
-  return buffer
-}
 
 function createFile (downloadFolder, torrentInfo) {
   if (torrentInfo.files) {

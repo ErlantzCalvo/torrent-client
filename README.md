@@ -202,10 +202,19 @@ The torrent file is divided into pieces, each typically 256 KB in size. Each pie
 4. Receive `Piece` messages and reassemble the blocks into a complete piece.
 5. Verify the piece using its SHA-1 hash.
 
+While developing the download function, I realized that, even if we asked for a block of 16 KiB of file data, every peer responded with buffers of different sizes. This is, it can be the case where we request 16KiB of a piece but the peer sends us 8 KiB, so that cases have to be handled. 
+
+In order to handle this case, we modify the information of the block received, reducing its length and increasing its beginning. 
+
+I.e.: a block's length is 16 KiB (16384 bits) and it begins in position 81920 (5th block of the piece). The response to this request is a buffer of 1024 bits length so, since we do not have the whole block but only part of it, we change the block information to set the remaining data we need out of it: 
+
+`block length remaining = 16384 - 1024 `  
+`block new beginning = 81920 + 1024 `  
+
 ## Installation
 
 ```bash
-git clone https://github.com/yourusername/NodeTorrent.git
-cd NodeTorrent
+git clone https://github.com/ErlantzCalvo/torrent-client.git
+cd torrent-client
 npm install
 
