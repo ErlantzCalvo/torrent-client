@@ -21,7 +21,7 @@ const MESSAGE_TYPES = {
  */
 export function handlePeerMessage (data, peer) {
   const message = parseMessage(data)
-  logMessageReceived(`Message received from peer: ${getMessageTypeById(message.id)}`)
+  logMessageReceived(`Message received: ${getMessageTypeById(message.id)}`, peer.peerName)
 
   switch (message.id) {
     case MESSAGE_TYPES.CHOKE:
@@ -111,7 +111,7 @@ function haveHandler (payload) {
  * @returns {number[]} Array of pieces' indexes available
  */
 function bitfieldHandler (payload) {
-  const pieces = new Array(payload.length * 8)
+  const pieces = Array.from({length: payload.length * 8})
   payload.forEach((byte, i) => {
     for (let j = 0; j < 8; j++) {
       if (byte % 2) {
@@ -126,5 +126,5 @@ function bitfieldHandler (payload) {
 }
 
 function getMessageTypeById (msgId) {
-  return Object.keys(MESSAGE_TYPES).find(type => MESSAGE_TYPES[type] === msgId)
+  return Object.keys(MESSAGE_TYPES).find(type => MESSAGE_TYPES[type] === msgId) || "Unknown message type"
 }

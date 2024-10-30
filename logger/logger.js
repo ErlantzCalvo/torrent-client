@@ -1,21 +1,29 @@
 import colors from 'colors'
 
-export function info (text) {
-  console.log(`${getDate()} - ${text}`)
+export function info (text, title) {
+  console.log(getLog(text, title))
 }
 
-export function error (text) {
-  console.log(colors.red(`${getDate()} - ${text}`))
+export function error (text, title) {
+  console.log(colors.red(getLog(text, title)))
 }
 
-export function warning (text) {
-  console.log(colors.yellow(`${getDate()} - ${text}`))
+export function warning (text, title) {
+  console.log(colors.yellow(getLog(text, title)))
 }
 
-export function logMessageReceived (text) {
-  console.log(colors.cyan(`${getDate()} - ${text}`))
+export function logMessageReceived (text, title) {
+  console.log(colors.cyan(getLog(text, title)))
 }
 
 export function getDate () {
   return new Date().toLocaleTimeString()
+}
+
+function getLog(text, title) {
+  let log = getDate() + ' - '
+  if(title) log += `[${title}] `
+  log += text
+
+  return log
 }

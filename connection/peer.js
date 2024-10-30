@@ -18,19 +18,19 @@ export class Peer extends EventEmitter {
    * @param {number} port
    * @param {string} id
    * @param {TorrentInfo} torrent
-   * @param {Queue} piecesQueue
+   * @param {string} peerName
    */
-  constructor (ip, port, id, torrent, piecesQueue) {
+  constructor (ip, port, id, torrent, peerName) {
     super()
     this.ip = ip
     this.port = port
     this.id = id
+    this.peerName = peerName
     this.torrent = torrent
     this.handshakeAchieved = false
     this.client = null
     this.connectionTimeout = null
     this.keepAliveInterval = null
-    this.piecesQueue = piecesQueue
     this.choked = true
     this._availablePieces = Array.from({ length: torrent.getPiecesNumber() }, () => 0)
     this.requested = null
@@ -71,7 +71,7 @@ export class Peer extends EventEmitter {
     if (this.id) buff.write(this.id, 48, 20, 'ascii')
     this.client.write(buff, (err) => {
       this._setSocketConnectionTimeout(HANDSHAKE_MAX_TIME)
-      logger.info(`Connection request sent to peer ${this.id}`)
+      logger.info(`Connection request sent to peer`, this.peerName)
       if (err) {
         console.error('Error sending handshake: ', err)
       }
@@ -115,7 +115,7 @@ export class Peer extends EventEmitter {
         pieceBlock.requested = false
       })
       this.requested = pieceBlock
-      logger.info(`REQUESTED PIECE Piece: ${this.requested.index} - Begin ${this.requested.begin}`)
+      logger.info(`REQUESTED PIECE: ${this.requested.index} - Begin ${this.requested.begin}`, this.peerName)
       break
     }
 
@@ -130,9 +130,9 @@ export class Peer extends EventEmitter {
     this.peerPerformance += Math.sqrt(payload.block.length)
     const offset = payload.index * this.torrent.getPieceLength(payload.index) + payload.begin
 
-    logger.info(`Received block ${blockIndex + 1}/${this.torrent.getBlocksPerPiece(payload.index)} of piece ${payload.index} (bytes: ${payload.block.length})`)
+    logger.info(`Received block ${blockIndex + 1}/${this.torrent.getBlocksPerPiece(payload.index)} of piece ${payload.index} (bytes: ${payload.block.length})`, this.peerName)
 
-    fs.write(this.torrent.file, payload.block, 0, payload.block.length, offset, (err) => {
+    fs.write(this.torrent.files, payload.block, 0, payload.block.length, offset, (err) => {
       if (err) console.error(err)
     })
 
@@ -215,7 +215,7 @@ function validateHandshake (peer, data) {
     peer.disconnect('peer-error', 'wrong-handshake')
   } else {
     peer.handshakeAchieved = true
-    logger.info(`Connected to peer ${peer.id}`)
+    logger.info(`Connected to peer`, peer.peerName)
   }
 }
 
