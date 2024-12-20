@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto'
 import { createFolder } from '../utils.js'
 import { requestPeers } from '../connection/announceRequester.js'
 import { Queue } from '../structures/queue.js'
-import { BLOCK_LENGTH } from '../constants.js'
+import { BLOCK_LENGTH, DOWNLOAD_FOLDER } from '../constants.js'
 import * as logger from '../logger/logger.js'
 
 export class TorrentInfo {
@@ -15,8 +15,8 @@ export class TorrentInfo {
       this._queue = new Queue(this)
       this._totalBytes = calculateTotalBytesLength(this.info)
       this._downloadedBytes = 0
-      this.downloadsFolderPath = 'Downloads'
-      createFolder(this.downloadsFolderPath)
+      this.downloadPath = null
+      createFolder(DOWNLOAD_FOLDER)
       this.file = this._getFile()
 
       if (verbose) { this.printInfo() }
@@ -157,6 +157,27 @@ export class TorrentInfo {
     return this.info.pieces.subarray(begin, begin + 20).toString('hex')
   }
 
+  getDownloadedPiecesNumber () {
+    let piecesDownloadedCorrectly = 0
+    const PIECE_NUMBER = this.getPiecesNumber()
+
+    const fd = fs.openSync(this.downloadPath, 'r')
+
+    for (let pieceIndex = 0; pieceIndex < PIECE_NUMBER; pieceIndex++) {
+      const PIECE_SIZE = this.info['piece length']
+      const buffer = Buffer.alloc(PIECE_SIZE)
+
+      const bytesRead = fs.readSync(fd, buffer, 0, PIECE_SIZE, null)
+      if (bytesRead === 0) return piecesDownloadedCorrectly
+
+      if (this.isValidPiece(buffer, pieceIndex)) {
+        piecesDownloadedCorrectly++
+      }
+    }
+
+    return piecesDownloadedCorrectly
+  }
+
   _getFile () {
     const filePath = this.downloadsFolderPath + '/' + this.info.name
     if (fs.existsSync(filePath)) {
@@ -167,11 +188,15 @@ export class TorrentInfo {
   }
 
   _setDownloadedPiecesOfFile () {
-    const filePath = this.downloadsFolderPath + '/' + this.info.name
+    if (this.info.files) {
+      this.downloadPath = this.downloadsFolderPath + '/' + this.info.name + '/' + this.info.name + '.temp'      
+    } else {
+      this.downloadPath = this.downloadsFolderPath + '/' + this.info.name
+    }
     const PIECE_NUMBER = this.getPiecesNumber()
     const torrent = this
 
-    const fd = fs.openSync(filePath, 'r+')
+    const fd = fs.openSync(this.downloadPath, 'r+')
 
     for (let pieceIndex = 0; pieceIndex < PIECE_NUMBER; pieceIndex++) {
       this._queue.push(pieceIndex)
@@ -222,13 +247,11 @@ export class TorrentInfo {
 
 function createFile (downloadFolder, torrentInfo) {
   if (torrentInfo.files) {
-    torrentInfo.files.forEach(file => {
-      const fileName = file.path?.pop()
-      const filePath = file.path?.join('/')
-      fs.mkdirSync(downloadFolder + '/' + filePath, { recursive: true })
-      return fs.openSync(downloadFolder + '/' + filePath + '/' + fileName, 'w')
-    })
+    fs.mkdirSync(`${downloadFolder}/${torrentInfo.name}/`, { recursive: true })
+    torrentInfo.downloadPath = `${downloadFolder}/${torrentInfo.name}/${torrentInfo.name}.temp`
+    return fs.openSync(`${downloadFolder}/${torrentInfo.name}/${torrentInfo.name}.temp`, 'w')
   } else {
+    torrentInfo.downloadPath = downloadFolder + '/' + torrentInfo.name
     return fs.openSync(downloadFolder + '/' + torrentInfo.name, 'w')
   }
 }
