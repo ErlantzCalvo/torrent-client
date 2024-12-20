@@ -2,6 +2,7 @@
 
 This project is a lightweight torrent client built from scratch in NodeJS. This project aims to provide a clear understanding of how a torrent client works by implementing the core features and functionalities from the ground up. This project serves as a learning tool and a base for further development.
 
+__Note: This client only download files ([Free rider](https://arpit.substack.com/i/72511877/free-riders))__
 
 ## Table of Contents
 
