@@ -132,7 +132,7 @@ export class Peer extends EventEmitter {
 
     logger.info(`Received block ${blockIndex + 1}/${this.torrent.getBlocksPerPiece(payload.index)} of piece ${payload.index} (bytes: ${payload.block.length})`, this.peerName)
 
-    fs.write(this.torrent.files, payload.block, 0, payload.block.length, offset, (err) => {
+    fs.write(this.torrent.file, payload.block, 0, payload.block.length, offset, (err) => {
       if (err) console.error(err)
     })
 

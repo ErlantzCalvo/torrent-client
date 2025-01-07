@@ -61,9 +61,19 @@ export class DownloadManager {
     }
   }
 
+  checkDownload () {
+    if(this._isDownloadComplete()) {
+      // handle download complete
+      this._closeAllPeersConections()
+    }
+  }
+
   _connectPeer (peerIdx) {
     logger.info(`Connecting to peer ${peerIdx}`)
     const peer = this._getPeer(peerIdx)
+
+    if(!peer) return null
+    
     peer.connect()
     this._connectedPeers[peerIdx] = peer
     this._connectedPeersNumber++
@@ -77,7 +87,10 @@ export class DownloadManager {
     peer.on('peer-error', () => this._handlePeerError(peerIdx))
     peer.on('choked', () => this._handlePeerDisconnect(peerIdx, 'choked'))
     peer.on('block-request-timeout', () => this._handlePeerDisconnect(peerIdx, 'block-request-timeout'))
-    peer.on('no-new-pieces', () => this._handlePeerDisconnectWithTimeout(peerIdx, 'no-new-pieces', 3600000 ))
+    peer.on('no-new-pieces', () => {
+      this.checkDownload()
+      this._handlePeerDisconnectWithTimeout(peerIdx, 'no-new-pieces', 3600000 )
+  })
 
     return peer
   }
@@ -114,6 +127,7 @@ export class DownloadManager {
   }
 
   _getPeer (peerIdx) {
+    if(!this.peersListInfo.peers[peerIdx]) return null
     const { ip, port } = this.peersListInfo.peers[peerIdx]
     const peerId = this.peersListInfo.peers[peerIdx]['peer id']
     const peerName = namesList[peerIdx]
@@ -137,5 +151,10 @@ export class DownloadManager {
 
   _closeAllPeersConections () {
     Object.keys(this._connectedPeers).forEach(peer => this._finishPeerConnection(peer))
+  }
+
+  _isDownloadComplete() {
+    const downloadedPieces = this._torrent.getDownloadedPiecesNumber()
+    return downloadedPieces === this._torrent.getPiecesNumber()
   }
 }
