@@ -71,7 +71,7 @@ export class Peer extends EventEmitter {
     if (this.id) buff.write(this.id, 48, 20, 'ascii')
     this.client.write(buff, (err) => {
       this._setSocketConnectionTimeout(HANDSHAKE_MAX_TIME)
-      logger.info(`Connection request sent to peer`, this.peerName)
+      logger.info('Connection request sent to peer', this.peerName)
       if (err) {
         console.error('Error sending handshake: ', err)
       }
@@ -215,7 +215,7 @@ function validateHandshake (peer, data) {
     peer.disconnect('peer-error', 'wrong-handshake')
   } else {
     peer.handshakeAchieved = true
-    logger.info(`Connected to peer`, peer.peerName)
+    logger.info('Connected to peer', peer.peerName)
   }
 }
 

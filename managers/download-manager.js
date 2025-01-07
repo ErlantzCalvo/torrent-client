@@ -2,7 +2,7 @@ import { Peer } from '../connection/peer.js'
 import { TorrentInfo } from '../torrent/torrentInfo.js' // eslint-disable-line
 import * as logger from '../logger/logger.js'
 import { PriorityQueue } from '../structures/priorityQueue.js'
-import {namesList} from '../constants.js'
+import { namesList } from '../constants.js'
 
 export class DownloadManager {
   /**
@@ -28,7 +28,7 @@ export class DownloadManager {
 
   async fetchPeersList () {
     this.peersListInfo = await this._torrent.requestTorrentPeers()
-    this.maxPeersNumber =  Math.min(this.maxPeersNumber, this.peersListInfo.peers.length)
+    this.maxPeersNumber = Math.min(this.maxPeersNumber, this.peersListInfo.peers.length)
   }
 
   async refreshPeers () {
@@ -62,7 +62,7 @@ export class DownloadManager {
   }
 
   checkDownload () {
-    if(this._isDownloadComplete()) {
+    if (this._isDownloadComplete()) {
       // handle download complete
       this._closeAllPeersConections()
     }
@@ -72,14 +72,14 @@ export class DownloadManager {
     logger.info(`Connecting to peer ${peerIdx}`)
     const peer = this._getPeer(peerIdx)
 
-    if(!peer) return null
-    
+    if (!peer) return null
+
     peer.connect()
     this._connectedPeers[peerIdx] = peer
     this._connectedPeersNumber++
 
     peer.on('timeout', () => {
-      logger.warning(`Peer timeout`, peer.peerName)
+      logger.warning('Peer timeout', peer.peerName)
       const timeout = 10000 / this._connectedPeers[peerIdx]?.peerPerformance || 1
       this._handlePeerDisconnectWithTimeout(peerIdx, 'timeout', timeout)
     })
@@ -89,8 +89,8 @@ export class DownloadManager {
     peer.on('block-request-timeout', () => this._handlePeerDisconnect(peerIdx, 'block-request-timeout'))
     peer.on('no-new-pieces', () => {
       this.checkDownload()
-      this._handlePeerDisconnectWithTimeout(peerIdx, 'no-new-pieces', 3600000 )
-  })
+      this._handlePeerDisconnectWithTimeout(peerIdx, 'no-new-pieces', 3600000)
+    })
 
     return peer
   }
@@ -127,7 +127,7 @@ export class DownloadManager {
   }
 
   _getPeer (peerIdx) {
-    if(!this.peersListInfo.peers[peerIdx]) return null
+    if (!this.peersListInfo.peers[peerIdx]) return null
     const { ip, port } = this.peersListInfo.peers[peerIdx]
     const peerId = this.peersListInfo.peers[peerIdx]['peer id']
     const peerName = namesList[peerIdx]
@@ -153,7 +153,7 @@ export class DownloadManager {
     Object.keys(this._connectedPeers).forEach(peer => this._finishPeerConnection(peer))
   }
 
-  _isDownloadComplete() {
+  _isDownloadComplete () {
     const downloadedPieces = this._torrent.getDownloadedPiecesNumber()
     return downloadedPieces === this._torrent.getPiecesNumber()
   }

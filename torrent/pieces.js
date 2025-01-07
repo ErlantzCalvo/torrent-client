@@ -6,7 +6,7 @@ const PIECE_STATE = {
 
 export class Pieces {
   constructor (piecesNum) {
-    this._pieces = Array.from({length: piecesNum}).fill(PIECE_STATE.NOT_REQUESTED)
+    this._pieces = Array.from({ length: piecesNum }).fill(PIECE_STATE.NOT_REQUESTED)
   }
 
   request (pieceIndex) {

@@ -11,22 +11,22 @@ const UDP_RESPONSES = {
   error: 3
 }
 
-export async function requestPeers(port, url, torrent) {
+export async function requestPeers (port, url, torrent) {
   try {
-    let result =  await makeAnnounceRequest(url.toString('utf8'), port, torrent)
+    const result = await makeAnnounceRequest(url.toString('utf8'), port, torrent)
     return result
   } catch (err) {
-    logger.error('Unable to get the peers from announcer: ' + url) 
-    throw new Error("Unable to get Peers")
+    logger.error('Unable to get the peers from announcer: ' + url)
+    throw new Error('Unable to get Peers')
   }
 }
 
-function isHttpRequest(urlStr) {
+function isHttpRequest (urlStr) {
   const url = new URL(urlStr)
   return url.protocol === 'http:' || url.protocol === 'https:'
 }
 
-async function makeAnnounceRequest(url, port, torrent) {
+async function makeAnnounceRequest (url, port, torrent) {
   return new Promise((resolve, reject) => {
     fetchUdpAnnounce(url, torrent)
       .then(resolve)
@@ -34,11 +34,11 @@ async function makeAnnounceRequest(url, port, torrent) {
         fetchHttpAnnounce(url, port, torrent.infoHash)
           .then(resolve)
           .catch(reject)
-      })  
+      })
   })
 }
 
-async function fetchHttpAnnounce(domain, port, infoHash) {
+async function fetchHttpAnnounce (domain, port, infoHash) {
   const connectionPort = port || 6881
   const infoHashEncoded = hexUrlEncoding(infoHash)
   const url = `${domain}?info_hash=${infoHashEncoded}&peer_id=-TR2940-k8hj0erlantz&port=${connectionPort}`
@@ -50,8 +50,8 @@ async function fetchHttpAnnounce(domain, port, infoHash) {
     })
 }
 
-//https://www.bittorrent.org/beps/bep_0015.html 
-async function fetchUdpAnnounce(domain, torrent, retries = 4) {
+// https://www.bittorrent.org/beps/bep_0015.html
+async function fetchUdpAnnounce (domain, torrent, retries = 4) {
   return new Promise((resolve, reject) => {
     const url = new URL(domain)
     const message = buildUdpRequest()
@@ -65,9 +65,9 @@ async function fetchUdpAnnounce(domain, torrent, retries = 4) {
       reject(err)
     })
 
-    sendUDPMessage(client, message, url, ()=>{
+    sendUDPMessage(client, message, url, () => {
       socketTimeout = setTimeout(() => {
-        if(retries > 0) fetchUdpAnnounce(domain, torrent, retries - 1).then(resolve).catch(reject)
+        if (retries > 0) fetchUdpAnnounce(domain, torrent, retries - 1).then(resolve).catch(reject)
         else reject('UDP timeout')
       }, 3000)
     })
@@ -75,38 +75,36 @@ async function fetchUdpAnnounce(domain, torrent, retries = 4) {
     client.on('message', function (data) {
       const responseType = data.readUInt32BE(0)
       clearTimeout(socketTimeout)
-      if (responseType === UDP_RESPONSES.connect) { 
-
+      if (responseType === UDP_RESPONSES.connect) {
         const connectionInfo = handleConnectionResponse(data)
-        
-        if(isValidConnectResponse(data, connectionInfo, transactionId)) {
+
+        if (isValidConnectResponse(data, connectionInfo, transactionId)) {
           const announcerequest = buildAnnounceRequest(connectionInfo.connectionId, torrent)
           sendUDPMessage(client, announcerequest, url, () => {
             socketTimeout = setTimeout(() => {
-              if(retries > 0) fetchUdpAnnounce(domain, torrent, retries - 1).then(resolve).catch(reject)
-              else reject(new Error( 'UDP timeout'))
+              if (retries > 0) fetchUdpAnnounce(domain, torrent, retries - 1).then(resolve).catch(reject)
+              else reject(new Error('UDP timeout'))
             }, 30000)
           })
         } else {
           reject('UDP connection transaction ID does not match')
         }
-
-      } else if (responseType === UDP_RESPONSES.announce) { 
+      } else if (responseType === UDP_RESPONSES.announce) {
         const peersInfo = parseUDPAnnounceResponse(data)
         resolve(peersInfo)
-      } else if (responseType === UDP_RESPONSES.error) { 
-        if(retries > 0) fetchUdpAnnounce(domain, torrent, retries - 1).then(resolve).catch(reject)
+      } else if (responseType === UDP_RESPONSES.error) {
+        if (retries > 0) fetchUdpAnnounce(domain, torrent, retries - 1).then(resolve).catch(reject)
         else reject('UDP connection error')
       }
     })
   })
 }
 
-function sendUDPMessage(socket, message, url, callback = ()=>{}) {
+function sendUDPMessage (socket, message, url, callback = () => {}) {
   socket.send(message, 0, message.length, url.port, url.hostname, callback)
 }
 
-function buildUdpRequest() {
+function buildUdpRequest () {
   const buffer = Buffer.allocUnsafe(16)
 
   // connectionId
@@ -121,7 +119,7 @@ function buildUdpRequest() {
   return buffer
 }
 
-function handleConnectionResponse(response) {
+function handleConnectionResponse (response) {
   return {
     action: response.readUInt32BE(0),
     transactionId: response.readUInt32BE(4),
@@ -129,55 +127,55 @@ function handleConnectionResponse(response) {
   }
 }
 
-function isValidConnectResponse(data, connectionInfo, transactionId) {
+function isValidConnectResponse (data, connectionInfo, transactionId) {
   return data.length >= 16 && connectionInfo.transactionId === transactionId
 }
 
-function buildAnnounceRequest(connectionId, torrent, port=6881) {
-  const buf = Buffer.allocUnsafe(98);
+function buildAnnounceRequest (connectionId, torrent, port = 6881) {
+  const buf = Buffer.allocUnsafe(98)
 
   // connection id
-  connectionId.copy(buf, 0);
+  connectionId.copy(buf, 0)
   // action
-  buf.writeUInt32BE(1, 8);
+  buf.writeUInt32BE(1, 8)
   // transaction id
-  randomBytes(4).copy(buf, 12);
+  randomBytes(4).copy(buf, 12)
   // info hash
   buf.write(torrent.infoHash, 16, 'hex')
   // torrentParser.infoHash(torrent).copy(buf, 16);
   // peerId
   randomBytes(20).copy(buf, 36)
   // downloaded
-  Buffer.alloc(8).copy(buf, 56);
+  Buffer.alloc(8).copy(buf, 56)
   // left
   buf.writeUint32BE(torrent._totalBytes, 64)
 
   const sizeIn8BytesBuff = bigNumsTo8BytesBufferConversor(torrent._totalBytes)
 
-  sizeIn8BytesBuff.copy(buf, 64);
+  sizeIn8BytesBuff.copy(buf, 64)
   // uploaded
-  Buffer.alloc(8).copy(buf, 72);
+  Buffer.alloc(8).copy(buf, 72)
   // event
-  buf.writeUInt32BE(0, 80);
+  buf.writeUInt32BE(0, 80)
   // ip address
-  buf.writeUInt32BE(0, 84);
+  buf.writeUInt32BE(0, 84)
   // key
-  randomBytes(4).copy(buf, 88);
+  randomBytes(4).copy(buf, 88)
   // num want
-  buf.writeInt32BE(-1, 92);
+  buf.writeInt32BE(-1, 92)
   // port
-  buf.writeUInt16BE(port, 96);
+  buf.writeUInt16BE(port, 96)
 
-  return buf;
+  return buf
 }
 
-function parseUDPAnnounceResponse(data) {
-  function group(iterable, groupSize) {
-    let groups = [];
+function parseUDPAnnounceResponse (data) {
+  function group (iterable, groupSize) {
+    const groups = []
     for (let i = 0; i < iterable.length; i += groupSize) {
-      groups.push(iterable.slice(i, i + groupSize));
+      groups.push(iterable.slice(i, i + groupSize))
     }
-    return groups;
+    return groups
   }
 
   return {

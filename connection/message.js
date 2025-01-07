@@ -53,7 +53,7 @@ export function handlePeerMessage (data, peer) {
     case MESSAGE_TYPES.REQUEST:
       break
     case MESSAGE_TYPES.PIECE:
-      if(message.payload.length < 8) return
+      if (message.payload.length < 8) return
       const payload = processPiecePayload(message.payload)
       peer._handlePiece(payload)
       break
@@ -111,7 +111,7 @@ function haveHandler (payload) {
  * @returns {number[]} Array of pieces' indexes available
  */
 function bitfieldHandler (payload) {
-  const pieces = Array.from({length: payload.length * 8})
+  const pieces = Array.from({ length: payload.length * 8 })
   payload.forEach((byte, i) => {
     for (let j = 0; j < 8; j++) {
       if (byte % 2) {
@@ -126,5 +126,5 @@ function bitfieldHandler (payload) {
 }
 
 function getMessageTypeById (msgId) {
-  return Object.keys(MESSAGE_TYPES).find(type => MESSAGE_TYPES[type] === msgId) || "Unknown message type"
+  return Object.keys(MESSAGE_TYPES).find(type => MESSAGE_TYPES[type] === msgId) || 'Unknown message type'
 }

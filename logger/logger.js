@@ -20,9 +20,9 @@ export function getDate () {
   return new Date().toLocaleTimeString()
 }
 
-function getLog(text, title) {
+function getLog (text, title) {
   let log = getDate() + ' - '
-  if(title) log += `[${title}] `
+  if (title) log += `[${title}] `
   log += text
 
   return log

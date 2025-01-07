@@ -42,22 +42,22 @@ export class TorrentInfo {
     }
 
     announceUrls = announceUrls.map(url => {
-      if(Array.isArray(url)) return url[0]
+      if (Array.isArray(url)) return url[0]
       return url
     })
 
     for (const announceUrl of announceUrls) {
       try {
-        let newPeersInfo = await requestPeers(port, announceUrl, this)
-        if(!peersInfo) peersInfo = newPeersInfo
-        else if(newPeersInfo.peers) peersInfo.peers = peersInfo.peers.concat(newPeersInfo.peers)
+        const newPeersInfo = await requestPeers(port, announceUrl, this)
+        if (!peersInfo) peersInfo = newPeersInfo
+        else if (newPeersInfo.peers) peersInfo.peers = peersInfo.peers.concat(newPeersInfo.peers)
 
         logger.info(`Retrieved ${peersInfo.peers.length} peers from announcers`)
       } catch (error) {}
     }
 
-    if(peersInfo) return peersInfo
-    process.exit(1)   
+    if (peersInfo) return peersInfo
+    process.exit(1)
   }
 
   getPiecesNumber () {
@@ -189,7 +189,7 @@ export class TorrentInfo {
 
   _setDownloadedPiecesOfFile () {
     if (this.info.files) {
-      this.downloadPath = this.downloadPath + '/' + this.info.name + '/' + this.info.name + '.temp'      
+      this.downloadPath = this.downloadPath + '/' + this.info.name + '/' + this.info.name + '.temp'
     } else {
       this.downloadPath = this.downloadPath + '/' + this.info.name
     }
@@ -243,7 +243,6 @@ export class TorrentInfo {
     }
   }
 }
-
 
 function createFile (downloadFolder, torrentInfo) {
   if (torrentInfo.files) {
