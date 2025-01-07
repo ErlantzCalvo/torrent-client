@@ -179,19 +179,19 @@ export class TorrentInfo {
   }
 
   _getFile () {
-    const filePath = this.downloadsFolderPath + '/' + this.info.name
+    const filePath = this.downloadPath + '/' + this.info.name
     if (fs.existsSync(filePath)) {
       return this._setDownloadedPiecesOfFile(filePath, this.info)
     } else {
-      return createFile(this.downloadsFolderPath, this.info)
+      return createFile(this.downloadPath, this.info)
     }
   }
 
   _setDownloadedPiecesOfFile () {
     if (this.info.files) {
-      this.downloadPath = this.downloadsFolderPath + '/' + this.info.name + '/' + this.info.name + '.temp'      
+      this.downloadPath = this.downloadPath + '/' + this.info.name + '/' + this.info.name + '.temp'      
     } else {
-      this.downloadPath = this.downloadsFolderPath + '/' + this.info.name
+      this.downloadPath = this.downloadPath + '/' + this.info.name
     }
     const PIECE_NUMBER = this.getPiecesNumber()
     const torrent = this
