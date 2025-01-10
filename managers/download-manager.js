@@ -69,10 +69,10 @@ export class DownloadManager {
   }
 
   _connectPeer (peerIdx) {
-    logger.info(`Connecting to peer ${peerIdx}`)
     const peer = this._getPeer(peerIdx)
-
     if (!peer) return null
+    
+    logger.info(`Connecting to peer ${peer.peerName}`)
 
     peer.connect()
     this._connectedPeers[peerIdx] = peer
@@ -80,7 +80,7 @@ export class DownloadManager {
 
     peer.on('timeout', () => {
       logger.warning('Peer timeout', peer.peerName)
-      const timeout = 10000 / this._connectedPeers[peerIdx]?.peerPerformance || 1
+      const timeout = 10000 / (this._connectedPeers[peerIdx]?.peerPerformance || 1)
       this._handlePeerDisconnectWithTimeout(peerIdx, 'timeout', timeout)
     })
 
