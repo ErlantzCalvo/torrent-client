@@ -32,8 +32,17 @@ export class Queue {
      * Returns and remove from queue all the blocks of the first queued piece
      * @returns {BlockInfo} blocks of the first piece
      */
-  popPieceBlock (pieceIndex) {
+  popUnrequestedPieceBlock (pieceIndex) {
     const idx = this._queue.findIndex(block => block.index === pieceIndex && !block.requested && !block.downloaded)
+    if (idx > -1) {
+      return this._queue[idx]
+    } else {
+      return null
+    }
+  }
+
+  popRequestedPieceBlock () {
+    const idx = this._queue.findIndex(block => !block.downloaded)
     if (idx > -1) {
       return this._queue[idx]
     } else {
@@ -81,6 +90,15 @@ export class Queue {
 
   has (pieceIndex) {
     return this._queue.some(piece => piece.index === pieceIndex)
+  }
+
+  hasUnrequestedblocks () {
+    return this._queue.some(piece => !piece.downloaded && !piece.requested )
+  }
+
+  isPieceComplete (pieceIndex) {
+    return this._queue.filter(block => block.index === pieceIndex)
+      .every(block => block.downloaded)
   }
 }
 

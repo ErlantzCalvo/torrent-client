@@ -15,7 +15,7 @@ export class TorrentInfo {
       this._queue = new Queue(this)
       this._totalBytes = calculateTotalBytesLength(this.info)
       this._downloadedBytes = 0
-      this.downloadPath = null
+      this.downloadPath = DOWNLOAD_FOLDER
       createFolder(DOWNLOAD_FOLDER)
       this.file = this._getFile()
 
@@ -116,7 +116,15 @@ export class TorrentInfo {
   }
 
   getAvailableBlockFromQueue (pieceIndex) {
-    return this._queue.popPieceBlock(pieceIndex)
+    return this._queue.popUnrequestedPieceBlock(pieceIndex)
+  }
+
+  getRequestedBlockFromQueue () {
+    return this._queue.popRequestedPieceBlock()
+  }
+
+  hasUnrequestedBlocks () {
+    return this._queue.hasUnrequestedblocks()
   }
 
   /**
