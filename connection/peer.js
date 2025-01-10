@@ -34,7 +34,7 @@ export class Peer extends EventEmitter {
     this.choked = true
     this._availablePieces = Array.from({ length: torrent.getPiecesNumber() }, () => 0)
     this.requested = null
-    this.peerPerformance = 1
+    this.peerPerformance = 0
   }
 
   connect () {
@@ -104,11 +104,14 @@ export class Peer extends EventEmitter {
 
   requestNextBlock () {
     for (let piece = 0; piece < this._availablePieces.length; piece++) {
-      const pieceBlock = this.torrent.getAvailableBlockFromQueue(piece)
+      let pieceBlock = this.torrent.getAvailableBlockFromQueue(piece)
 
       // If piece is not in queue or is already processed go to next piece
       const pieceBlockIsAvailable = pieceBlock && !pieceBlock.requested && !pieceBlock.downloaded
-      if (!pieceBlockIsAvailable) continue
+      if (!pieceBlockIsAvailable) {
+        if (this.torrent.hasUnrequestedBlocks()) continue
+        else pieceBlock = this.torrent.getRequestedBlockFromQueue()
+      } 
 
       this._requestBlock(pieceBlock)
       pieceBlock.setRequested(20_000, () => {
